@@ -19,7 +19,7 @@ Repository: https://github.com/meenapriyadars20/vidya-tutor-bot
 
 ### Beyond the bonus
 
-- **Three interchangeable LLM engines.** Sarvam-105b (default, retrieval-based), Gemini Flash (long-context, no retrieval loss), and Groq Llama 3.3 70B (free long-context alternative). Switch in the settings modal.
+- **Three interchangeable LLM engines.** Groq Llama 3.3 70B (default, free long-context, best for Indian code-mixed content), Sarvam-105b (retrieval-based), and Gemini Flash (long-context alternative). Switch in the settings modal.
 - **Pre-reads.** Attach supplementary reading materials (webpages, PDFs, plain text) to any lecture, either by URL or file upload. Vidya extracts and chunks the text, merges it into the same timeline as the audio, and can cite from it. When you load a YouTube URL, links found in the video's description are surfaced as one-click "Add as pre-read" suggestions after an LLM classifier drops noise.
 - **Any public video URL.** yt-dlp supports 1000+ sites (YouTube, Vimeo, Dailymotion, TED, Twitch VODs, direct .mp4 links, and more).
 - **Chrome side-panel extension** for gated content that has no public URL. It can either send the current tab's URL to Vidya or capture the tab's audio directly (works on private LMS platforms, internal training tools, etc.). DRM-protected sites like Netflix are detected and warned about.
@@ -86,11 +86,14 @@ A model fabricating a plausible-sounding citation is caught and blocked before t
 - Python 3.10 or later
 - A **Sarvam API key** from https://dashboard.sarvam.ai (free tier is enough for a demo)
 
-**Optional but strongly recommended:**
+**Groq is the default engine and is strongly recommended:**
 
-- A **Groq API key** from https://console.groq.com. Free tier is 500K tokens/day and 14,400 requests/day, no card required. Groq is the best long-context engine for Indian code-mixed and transliterated content.
-- A **Google Gemini API key** from https://aistudio.google.com/apikey. Alternative long-context engine. Free tier is tighter than Groq (20 requests/day on Flash Latest as of writing).
-- A **Cohere API key** from https://dashboard.cohere.com. Enables Cohere Rerank v3 to improve retrieval precision. Free trial gives 1,000 calls/month.
+- A **Groq API key** from https://console.groq.com. Free tier is 500K tokens/day and 14,400 requests/day, no card required. Groq handles Indian code-mixed and transliterated content best in testing, which is why Vidya defaults to it.
+
+**Also optional:**
+
+- A **Google Gemini API key** from https://aistudio.google.com/apikey. Alternative long-context engine. Free tier is tighter than Groq.
+- A **Cohere API key** from https://dashboard.cohere.com. Enables Cohere Rerank v3 to improve retrieval precision when using Sarvam-105b. Free trial gives 1,000 calls/month.
 
 Chrome or Edge is needed only for the browser extension.
 
@@ -137,9 +140,9 @@ Open http://127.0.0.1:5000 in Chrome or Edge.
    - **Paste text**: paste an existing transcript directly.
 2. **Optional: attach pre-reads** (PDFs, articles, docs). URL or file. YouTube-description links are auto-suggested after an LLM classifier drops noise.
 3. **Choose your engine** in the settings modal (gear icon → Advanced reasoning options):
-   - **Sarvam-105b** (default): fast, retrieval-based, uses about 5K tokens per question.
-   - **Gemini Flash (latest)**: long-context, no retrieval loss. Free tier has strict per-day limits.
-   - **Groq Llama 3.3 70B**: long-context, best for code-mixed and transliterated Indian content, free tier is generous.
+   - **Groq Llama 3.3 70B** (default): long-context, best for code-mixed and transliterated Indian content, free tier is generous.
+   - **Sarvam-105b**: fast, retrieval-based, uses about 5K tokens per question.
+   - **Gemini Flash (latest)**: long-context alternative. Free tier has strict per-day limits.
 4. **Pick your languages** using the three dropdowns at the top: Question Language (STT hint), Answer Language (LLM output), Answer Voice (TTS).
 5. **Ask a question** by typing or clicking Record and speaking.
 6. **Read the answer.** Click "Show evidence (N)" to reveal the verified quotes with timestamps. Click Speak to hear the answer, Pause to hold it.
@@ -188,7 +191,7 @@ DRM-protected sites (Netflix, Prime Video, Disney+, Hotstar, etc.) will be flagg
 
 ---
 
-## Edge cases Vidya does NOT handle (be honest)
+## Edge cases Vidya does NOT handle
 
 - **Visual understanding of video frames.** Previously supported via Gemini Vision; removed because per-frame calls burned quota. Anything shown on screen but never spoken is invisible to Vidya.
 - **Real token streaming.** The UI uses a typing animation after the full answer is received. Nice feel, but no first-token latency improvement.
@@ -224,36 +227,14 @@ vidya-tutor-bot/
 
 ## Design decisions
 
-- **Sarvam-105b** as the default engine. It is fast, has a comfortable context, and is what the assignment asks for. Retrieval keeps it inside its context window for long lectures.
-- **Groq Llama 3.3 70B** as the recommended engine for Indian code-mixed and transliterated content. In practice, Groq handled these edge cases better than Sarvam-105b in testing.
-- **Gemini Flash** kept as a second long-context option because Google's key is different from Groq's and gives redundancy.
+- **Groq Llama 3.3 70B** as the default engine. In testing it handled Indian code-mixed and transliterated content better than the other engines, and its free tier is generous enough to demo comfortably.
+- **Sarvam-105b** kept as the retrieval-based fallback and for STT/TTS. It is what the assignment asks for and remains a first-class choice when full-context is not needed.
+- **Gemini Flash** kept as a second long-context option because Google's key is separate from Groq's and gives redundancy.
 - **Cohere Rerank v3** as an optional precision boost on top of BM25.
 - **BM25 with LLM-generated query variants** rather than semantic embeddings. Zero embedding infrastructure, still catches paraphrases via the query variants.
 - **JSON output + verbatim quote check** rather than a second LLM verification call. Half the tokens, same protection against hallucinated citations.
 - **Chrome side panel (Manifest V3)** rather than a popup, so the panel stays open while the student watches the video.
 - **Fresh session on every refresh.** Preferences persist; content does not. Reduces confusion when a student comes back later.
-
----
-
-## Deploying a live demo on Render
-
-If you want your interviewer to click a link instead of installing Python locally, `render.yaml` is already at the repo root.
-
-1. Sign up at https://render.com with your GitHub account.
-2. Click **New +** → **Web Service** → select this repo.
-3. Render reads `render.yaml` and pre-fills the settings. Confirm **Free** plan.
-4. Scroll to **Environment Variables** and add:
-   - `SARVAM_API_KEY` (required)
-   - `GROQ_API_KEY` (strongly recommended)
-   - `GEMINI_API_KEY` (optional)
-   - `COHERE_API_KEY` (optional)
-5. Click **Create Web Service**. First build takes ~5 minutes.
-6. Render gives you a URL like `https://vidya-xxxx.onrender.com`. Send that to your interviewer.
-
-### Two things to know about Render's free tier
-
-- **Cold start**: after 15 min of no traffic the server sleeps. First visitor takes ~40 seconds to wake. Warn the interviewer.
-- **Shared quotas**: your Sarvam / Groq / Gemini / Cohere quotas are used by every visitor. Rotate the keys after the interview.
 
 ---
 

@@ -1630,7 +1630,7 @@ def ask():
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
     history = data.get("history") or []
-    requested_engine = (data.get("qa_engine") or "sarvam").strip().lower()
+    requested_engine = (data.get("qa_engine") or "groq").strip().lower()
     use_query_rewriting = bool(data.get("use_query_rewriting", True))
     answer_language = (data.get("answer_language") or "auto").strip()
     if answer_language not in SARVAM_LANGUAGE_NAMES:
