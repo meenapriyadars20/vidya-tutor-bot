@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vidya</title>
+  <style>
+    :root {
+      --violet: #7c3aed;
+      --violet-2: #6d28d9;
+      --blue: #2563eb;
+      --violet-soft: #ede9fe;
+      --border: #e5e3f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --err: #dc2626;
+      --warn: #d97706;
+      --ok: #16a34a;
+      --grad: linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #2563eb 100%);
+    }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      background: #f7f7fb;
+      color: var(--text);
+      height: 100vh;
+    }
+    .toolbar {
+      padding: 10px 12px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .brand-mark {
+      width: 22px; height: 22px;
+      border-radius: 7px;
+      background: var(--grad);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: "Noto Sans Devanagari", "Mangal", serif;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .brand-sub { color: var(--muted); font-weight: 500; font-size: 11px; }
+
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--grad);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.danger {
+      background: #fef2f2;
+      color: var(--err);
+      border: 1px solid #fecaca;
+    }
+    .status {
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 14px;
+    }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .status.warn { color: var(--warn); }
+    .drm-warn {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      display: none;
+    }
+    iframe {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 0;
+      background: white;
+    }
+    .server-warn {
+      background: #fef2f2;
+      color: var(--err);
+      border: 1px solid #fecaca;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div class="brand">
+        <span class="brand-mark">व</span>
+        <span>Vidya</span>
+        <span class="brand-sub">side panel</span>
+      </div>
+      <span class="status" id="tab-title" style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+    </div>
+    <div class="btn-row">
+      <button id="use-url" class="secondary">Use this page's URL</button>
+      <button id="capture-audio">Record tab audio</button>
+      <button id="stop-capture" class="danger" style="display:none;">Stop</button>
+    </div>
+    <div class="drm-warn" id="drm-warn">
+      Heads up: this site often uses DRM which will block tab audio capture. Try the URL button instead.
+    </div>
+    <div class="status" id="ext-status">Ready.</div>
+  </div>
+
+  <div class="server-warn" id="server-warn">
+    The Vidya local server does not seem to be running. Start it with <code>python app.py</code> in <code>C:\Claude Experiment</code>, then reload this side panel.
+  </div>
+  <iframe id="frame" src="http://127.0.0.1:5000/"></iframe>
+
+<script>
+"use strict";
+const BACKEND = "http://127.0.0.1:5000";
+const DRM_HOSTS = [
+  "netflix.com", "primevideo.com", "hotstar.com", "disneyplus.com",
+  "hbomax.com", "max.com", "hulu.com", "peacocktv.com", "sonyliv.com",
+  "zee5.com", "spotify.com", "apple.com",
+];
+
+const $ = (id) => document.getElementById(id);
+function setStatus(msg, kind) {
+  const el = $("ext-status");
+  el.textContent = msg || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+
+let activeTabId = null;
+let currentStream = null;
+let mediaRecorder = null;
+let audioCtx = null;
+let recordedChunks = [];
+
+async function loadActiveTab() {
+  const info = await chrome.runtime.sendMessage({ type: "vidya-get-active-tab" });
+  activeTabId = info?.id || null;
+  const title = info?.title || "";
+  const url = info?.url || "";
+  $("tab-title").textContent = title.slice(0, 40);
+  const drm = DRM_HOSTS.some(h => url.includes(h));
+  $("drm-warn").style.display = drm ? "block" : "none";
+  return info;
+}
+
+async function checkBackend() {
+  try {
+    const r = await fetch(BACKEND + "/api/key-status", { cache: "no-store" });
+    if (!r.ok) throw new Error("bad status");
+    $("server-warn").style.display = "none";
+    $("frame").style.display = "";
+  } catch {
+    $("server-warn").style.display = "block";
+    $("frame").style.display = "none";
+  }
+}
+
+function postToFrame(payload) {
+  const frame = $("frame");
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ __vidya: true, ...payload }, BACKEND);
+  }
+}
+
+$("use-url").onclick = async () => {
+  const info = await loadActiveTab();
+  if (!info?.url) { setStatus("Could not read the active tab URL.", "err"); return; }
+  postToFrame({ type: "set-video-url", url: info.url });
+  setStatus("URL sent to Vidya. Click Load in the panel.", "ok");
+};
+
+$("capture-audio").onclick = async () => {
+  const info = await loadActiveTab();
+  if (!info?.id) { setStatus("No active tab.", "err"); return; }
+  setStatus("Requesting tab audio...");
+  const resp = await chrome.runtime.sendMessage({
+    type: "vidya-get-tab-stream-id",
+    tabId: info.id,
+  });
+  if (resp?.error || !resp?.streamId) {
+    setStatus("Tab capture blocked: " + (resp?.error || "unknown"), "err");
+    return;
+  }
+  try {
+    currentStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: resp.streamId,
+        },
+      },
+    });
+  } catch (e) {
+    setStatus("Could not open the audio stream: " + e.message, "err");
+    return;
+  }
+  // Play the audio back so the user can still hear the video.
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(currentStream);
+  src.connect(audioCtx.destination);
+
+  recordedChunks = [];
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus" : "audio/webm";
+  mediaRecorder = new MediaRecorder(currentStream, { mimeType: mime });
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+  };
+  mediaRecorder.onstop = onRecordingStopped;
+  mediaRecorder.start(1000);
+  setStatus("Recording tab audio. Play the video, then click Stop.", "ok");
+  $("capture-audio").style.display = "none";
+  $("stop-capture").style.display = "";
+};
+
+$("stop-capture").onclick = () => {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+};
+
+async function onRecordingStopped() {
+  $("capture-audio").style.display = "";
+  $("stop-capture").style.display = "none";
+  if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) { try { await audioCtx.close(); } catch (e) {} }
+  const blob = new Blob(recordedChunks, { type: "audio/webm" });
+  if (blob.size < 1000) {
+    setStatus("Recording is empty. DRM or a muted tab probably blocked it.", "err");
+    return;
+  }
+  setStatus("Uploading and transcribing (" + (blob.size / 1024 / 1024).toFixed(1) + " MB)...");
+  const fd = new FormData();
+  fd.append("file", blob, "tab-capture.webm");
+  fd.append("language_code", "unknown");
+  fd.append("use_vision", "false");
+  try {
+    const r = await fetch(BACKEND + "/api/transcribe-file", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) { setStatus("Transcription failed: " + (j.error || "unknown"), "err"); return; }
+    postToFrame({
+      type: "set-transcript",
+      text: j.text || (j.timeline || []).map(e => e.text).join(" "),
+      title: "Captured from tab",
+    });
+    setStatus("Loaded into Vidya. Ask your question in the panel.", "ok");
+  } catch (e) {
+    setStatus("Network error: " + e.message, "err");
+  }
+}
+
+// Startup
+checkBackend();
+loadActiveTab();
+setInterval(checkBackend, 8000);
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Render deployment config for Vidya.
+# Push this repo to GitHub, then in Render:
+#   1. New + Web Service, pick this repo.
+#   2. Render auto-detects this file; confirm the plan (Free is fine).
+#   3. In the "Environment" tab, add the four API keys as environment
+#      variables (SARVAM_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, COHERE_API_KEY).
+#   4. Click Deploy. First build takes ~5 minutes.
+#   5. Render gives you a URL like https://vidya-tutor-bot.onrender.com
+
+services:
+  - type: web
+    name: vidya
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 300 app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: RENDER
+        value: "true"

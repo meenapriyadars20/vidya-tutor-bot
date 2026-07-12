@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Vidya - Lecture-grounded tutor",
+  "version": "1.0.0",
+  "description": "Ask questions about any lecture video, strictly grounded to its transcript. Works even on gated video sites via tab audio capture.",
+  "permissions": ["sidePanel", "activeTab", "tabCapture", "tabs", "scripting"],
+  "host_permissions": [
+    "http://127.0.0.1:5000/*",
+    "http://localhost:5000/*"
+  ],
+  "action": {
+    "default_title": "Open Vidya"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

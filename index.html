@@ -1,0 +1,2676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vidya · Lecture-grounded tutor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #efe6d2;
+      --panel: #fbf5e6;
+      --panel-2: #e3d6b6;
+      --text: #2f261a;
+      --text-2: #524634;
+      --muted: #85755d;
+      --border: #d1c19e;
+      --border-strong: #bba884;
+      --violet: #7c3aed;
+      --violet-2: #6d28d9;
+      --blue: #2563eb;
+      --violet-soft: #ede0fb;
+      --blue-soft: #dfe8ff;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --err: #dc2626;
+      --grad: linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #2563eb 100%);
+      --shadow: 0 1px 2px rgba(50, 40, 20, 0.06), 0 8px 24px rgba(140, 100, 40, 0.10);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      font-size: 17px;
+    }
+    .brand-mark {
+      width: 28px; height: 28px;
+      border-radius: 9px;
+      background: var(--grad);
+      box-shadow: 0 3px 10px rgba(15, 118, 110, 0.28);
+      position: relative;
+    }
+    .brand-mark::after {
+      content: "व";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 15px;
+      font-family: "Noto Sans Devanagari", "Mangal", serif;
+    }
+    .brand-sub {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 13px;
+      margin-left: 8px;
+      padding-left: 10px;
+      border-left: 1px solid var(--border-strong);
+    }
+    .top-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+    }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .status-dot.ok { background: var(--ok); }
+    .status-dot.err { background: var(--err); }
+
+    .container {
+      max-width: 1320px;
+      margin: 0 auto;
+      padding: 18px 20px 30px;
+    }
+    .lang-strip {
+      display: flex;
+      gap: 12px;
+      align-items: end;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      flex-wrap: wrap;
+    }
+    .lang-picker {
+      flex: 1 1 180px;
+      min-width: 150px;
+    }
+    .lang-picker label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .lang-picker select {
+      padding: 10px 12px;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(360px, 440px) 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .workspace > .card { margin-bottom: 0; }
+    .workspace > .card:first-child {
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+      position: sticky;
+      top: 74px;
+    }
+    .workspace > .card:last-child {
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 110px);
+      overflow: hidden;
+    }
+    .workspace > .card:last-child .messages {
+      flex: 1 1 auto;
+      max-height: none;
+      min-height: 200px;
+    }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 1fr; }
+      .workspace > .card:first-child, .workspace > .card:last-child {
+        max-height: none; position: static; overflow: visible;
+      }
+    }
+
+    .icon-btn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      border-radius: 999px;
+      width: 36px; height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .icon-btn:hover { background: var(--panel-2); box-shadow: none; }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      z-index: 1000;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+      overflow-y: auto;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      background: var(--panel);
+      border-radius: 16px;
+      max-width: 560px;
+      width: 100%;
+      padding: 28px 26px 24px;
+      position: relative;
+      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.24);
+    }
+    .modal-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      background: transparent;
+      border: none;
+      font-size: 26px;
+      line-height: 1;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .modal-close:hover { background: var(--panel-2); box-shadow: none; color: var(--text); }
+
+    /* Quiz styles */
+    .quiz-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .quiz-progress {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .quiz-score {
+      background: var(--violet-soft);
+      color: var(--violet-2);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .quiz-question {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 10px 0 16px;
+      line-height: 1.5;
+    }
+    .quiz-option {
+      display: block;
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      text-align: left;
+      color: var(--text);
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: all 0.15s;
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .quiz-option:hover:not(:disabled) { border-color: var(--violet); background: var(--violet-soft); box-shadow: none; }
+    .quiz-option.correct { border-color: var(--ok); background: #ecfdf5; color: #047857; }
+    .quiz-option.incorrect { border-color: var(--err); background: #fef2f2; color: var(--err); }
+    .quiz-option:disabled { cursor: default; }
+    .quiz-feedback {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+    .quiz-feedback.correct { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    .quiz-feedback.incorrect { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d; }
+    .quiz-feedback .qf-quote {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border-left: 3px solid var(--violet);
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+      color: var(--text-2);
+      font-size: 12.5px;
+    }
+    .quiz-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .quiz-final {
+      text-align: center;
+      padding: 20px 10px;
+    }
+    .quiz-final h3 {
+      margin: 0 0 6px;
+      background: var(--grad);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-size: 34px;
+    }
+    .quiz-final p { color: var(--text-2); margin: 6px 0; }
+
+
+    .hero {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: 36px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+    }
+    .hero h1 .grad {
+      background: var(--grad);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero p {
+      margin: 12px auto 0;
+      max-width: 600px;
+      color: var(--text-2);
+      font-size: 15px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 22px 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .card-head h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--violet-soft);
+      color: var(--violet-2);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .card-hint { font-size: 12px; color: var(--muted); }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    input[type="text"], input[type="password"], input[type="url"], textarea, select {
+      width: 100%;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--violet);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+    }
+    input[type="file"] {
+      background: var(--panel);
+      border: 1px dashed var(--border-strong);
+      padding: 10px;
+      font-size: 13px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      line-height: 1.55;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .row > input { flex: 1 1 220px; min-width: 0; }
+    .row > select { flex: 0 1 180px; }
+
+    button {
+      background: var(--grad);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 11px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 0.05s, box-shadow 0.15s, opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(15, 118, 110, 0.26); }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+    }
+    button.secondary:hover:not(:disabled) { background: var(--panel-2); box-shadow: none; }
+    button.ghost {
+      background: transparent;
+      color: var(--text-2);
+      border: 1px solid transparent;
+      padding: 9px 12px;
+    }
+    button.ghost:hover:not(:disabled) { background: var(--panel-2); box-shadow: none; }
+    button.record {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border-strong);
+    }
+    button.record .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--err); }
+    button.record.recording {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: var(--err);
+    }
+    button.record.recording .dot { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.4); }
+    }
+
+    .status {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 10px;
+      min-height: 18px;
+    }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .status.warn { color: var(--warn); }
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--border-strong);
+      border-top-color: var(--violet);
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 16px 0;
+      font-weight: 600;
+    }
+    .divider::before, .divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 28px; }
+      .container { padding: 20px 14px 40px; }
+      .brand-sub { display: none; }
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: var(--violet-soft);
+      border: 1px solid #ddd6fe;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text-2);
+    }
+    .toggle-row input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: var(--violet);
+    }
+    .toggle-row.disabled {
+      background: var(--panel-2);
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    .loaded-summary {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, var(--violet-soft) 0%, var(--blue-soft) 100%);
+      border: 1px solid #ddd6fe;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text-2);
+    }
+    .loaded-summary strong { color: var(--violet-2); }
+    .loaded-summary .meta {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .loaded-summary details { margin-top: 8px; }
+    .loaded-summary summary { cursor: pointer; color: var(--violet-2); font-weight: 600; }
+    .preread-header {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .preread-item, .preread-suggestion {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 5px;
+      font-size: 12.5px;
+    }
+    .preread-item {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+    }
+    .preread-suggestion {
+      background: var(--violet-soft);
+      color: var(--text-2);
+    }
+    .preread-item .src, .preread-suggestion label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin: 0;
+      font-weight: 400;
+    }
+    .preread-suggestion input[type="checkbox"] { accent-color: var(--violet); }
+    .preread-item button {
+      padding: 4px 10px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .loaded-summary pre {
+      white-space: pre-wrap;
+      font-size: 12px;
+      color: var(--text-2);
+      max-height: 240px;
+      overflow: auto;
+      margin: 8px 0 0;
+      font-family: ui-monospace, "SF Mono", Monaco, monospace;
+      background: rgba(247, 250, 246, 0.72);
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    /* Chat */
+    .messages {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 560px;
+      overflow-y: auto;
+      padding: 6px 4px;
+    }
+    .messages:empty::before {
+      content: "Ask your first question below. Answers will appear here, grounded to the lecture.";
+      color: var(--muted);
+      font-style: italic;
+      font-size: 13px;
+      padding: 20px;
+      text-align: center;
+      display: block;
+    }
+    .msg {
+      display: flex;
+      max-width: 92%;
+    }
+    .msg.student { align-self: flex-end; }
+    .msg.tutor .legacy-mark::after {
+      content: "व";
+      font-family: "Noto Sans Devanagari", "Mangal", serif;
+    }
+    .msg .bubble {
+      padding: 12px 15px;
+      border-radius: 14px;
+      font-size: 14.5px;
+      line-height: 1.55;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    .msg.student .bubble {
+      background: var(--grad);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.tutor .bubble {
+      background: var(--panel-2);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .msg.tutor.blocked .bubble {
+      background: #fffbeb;
+      border-color: #fde68a;
+    }
+    .msg .below {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .quote-box {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--violet);
+      border-radius: 0 8px 8px 0;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      color: var(--text-2);
+      font-style: italic;
+    }
+    .quote-box .quote-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--violet-2);
+      font-weight: 700;
+      font-style: normal;
+      margin-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .quote-box .ts {
+      background: var(--violet-soft);
+      color: var(--violet-2);
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      align-self: flex-start;
+    }
+    .badge.ok { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .badge.blocked { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge.retrieval { background: var(--blue-soft); color: var(--blue); border: 1px solid #bfdbfe; margin-left: 6px; }
+
+    .row-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 2px;
+      flex-wrap: wrap;
+    }
+    .row-buttons button {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .input-area {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .input-area textarea {
+      min-height: 70px;
+      margin-bottom: 10px;
+    }
+    .input-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 24px 20px 0;
+    }
+    .footer a { color: var(--violet-2); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    .subtle-link {
+      background: none;
+      border: none;
+      color: var(--violet-2);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 0;
+      font-weight: 500;
+    }
+    .subtle-link:hover { text-decoration: underline; box-shadow: none; }
+
+    .lang-btn {
+      background: var(--panel);
+      color: var(--text-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: inherit;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .lang-btn:hover { background: var(--panel-2); border-color: var(--border-strong); box-shadow: none; }
+    .lang-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+      min-width: 180px;
+      z-index: 100;
+      padding: 6px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .lang-option {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .lang-option:hover { background: var(--violet-soft); box-shadow: none; color: var(--violet-2); }
+    .lang-option.active { background: var(--violet-soft); color: var(--violet-2); }
+
+    /* Mobile-first improvements */
+    @media (max-width: 620px) {
+      .topbar { padding: 10px 14px; }
+      .brand-sub { display: none; }
+      .container { padding: 16px 12px 40px; }
+      .hero { margin-bottom: 18px; }
+      .hero h1 { font-size: 24px; }
+      .hero p { font-size: 14px; }
+      .card { padding: 16px 14px 14px; border-radius: 12px; }
+      .card-head h2 { font-size: 14px; }
+      button { padding: 10px 14px; font-size: 14px; min-height: 42px; }
+      button.secondary, button.ghost { min-height: 40px; }
+      input[type="text"], input[type="password"], input[type="url"], textarea, select {
+        font-size: 15px; padding: 12px 14px;
+      }
+      .messages { max-height: none; }
+      .msg { max-width: 96%; }
+      .msg .bubble { font-size: 15px; padding: 12px 14px; }
+      .row { flex-direction: column; }
+      .row > * { width: 100%; flex: 1 1 auto; }
+      .lang-btn { padding: 8px 14px; font-size: 14px; }
+      .lang-menu { right: -6px; }
+      .divider { margin: 12px 0; font-size: 10px; }
+      .grid-2 { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <span>Vidya</span>
+      <span class="brand-sub" data-i18n="tagline">Lecture-grounded tutor</span>
+    </div>
+    <div class="top-actions">
+      <button id="open-settings" class="icon-btn" aria-label="Settings" title="API keys">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <div class="ui-lang-wrap" style="position: relative;">
+        <button id="ui-lang-btn" class="lang-btn">
+          <span id="ui-lang-current">English</span>
+          <span style="opacity: 0.6; font-size: 10px;">▾</span>
+        </button>
+        <div id="ui-lang-menu" class="lang-menu" style="display:none;">
+          <button class="lang-option" data-lang="en-IN">English</button>
+          <button class="lang-option" data-lang="hi-IN">हिन्दी</button>
+          <button class="lang-option" data-lang="bn-IN">বাংলা</button>
+          <button class="lang-option" data-lang="gu-IN">ગુજરાતી</button>
+          <button class="lang-option" data-lang="kn-IN">ಕನ್ನಡ</button>
+          <button class="lang-option" data-lang="ml-IN">മലയാളം</button>
+          <button class="lang-option" data-lang="mr-IN">मराठी</button>
+          <button class="lang-option" data-lang="od-IN">ଓଡ଼ିଆ</button>
+          <button class="lang-option" data-lang="pa-IN">ਪੰਜਾਬੀ</button>
+          <button class="lang-option" data-lang="ta-IN">தமிழ்</button>
+          <button class="lang-option" data-lang="te-IN">తెలుగు</button>
+        </div>
+      </div>
+      <!-- Legacy status dots kept in DOM but hidden so existing JS refresh code keeps working -->
+      <span class="status-chip" id="sarvam-chip" style="display:none;"><span class="status-dot" id="sarvam-dot"></span></span>
+      <span class="status-chip" id="gemini-chip" style="display:none;"><span class="status-dot" id="gemini-dot"></span></span>
+      <span class="status-chip" id="cohere-chip" style="display:none;"><span class="status-dot" id="cohere-dot"></span></span>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- QUIZ MODAL -->
+    <div id="quiz-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal" style="max-width: 640px;">
+        <button id="close-quiz" class="modal-close" aria-label="Close">&times;</button>
+        <div id="quiz-body">
+          <div id="quiz-loading" style="text-align:center; padding: 40px 20px;">
+            <div class="spinner" style="width: 24px; height: 24px; border-width: 3px;"></div>
+            <div style="margin-top: 12px; color: var(--muted);" data-i18n="quizGenerating">Vidya is writing your quiz...</div>
+          </div>
+          <div id="quiz-content" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETUP MODAL -->
+    <div id="settings-modal" class="modal-backdrop" style="display:none;">
+      <div class="modal">
+        <button id="close-settings" class="modal-close" aria-label="Close">&times;</button>
+        <section class="card" id="setup-card" style="margin:0; box-shadow:none; border:none; padding:0;">
+      <div class="card-head">
+        <h2>Setup</h2>
+        <button class="subtle-link" id="toggle-setup">Hide</button>
+      </div>
+      <div id="setup-body">
+        <label for="sarvam-key">Sarvam API key (required for STT, TTS, and the tutor LLM)</label>
+        <div class="row">
+          <input type="password" id="sarvam-key" placeholder="Paste Sarvam key" autocomplete="off" />
+          <button data-save="sarvam">Save</button>
+        </div>
+        <div class="status" id="sarvam-status"></div>
+
+        <label for="gemini-key" style="margin-top:16px;">Gemini API key (optional, for lecture visuals and long-context QA)</label>
+        <div class="row">
+          <input type="password" id="gemini-key" placeholder="Paste Gemini key (get one at aistudio.google.com)" autocomplete="off" />
+          <button data-save="gemini">Save</button>
+        </div>
+        <div class="status" id="gemini-status"></div>
+
+        <label for="cohere-key" style="margin-top:16px;">Cohere API key (optional, for reranking retrieved chunks)</label>
+        <div class="row">
+          <input type="password" id="cohere-key" placeholder="Paste Cohere key (get one at dashboard.cohere.com)" autocomplete="off" />
+          <button data-save="cohere">Save</button>
+        </div>
+        <div class="status" id="cohere-status"></div>
+
+        <label for="groq-key" style="margin-top:16px;">Groq API key (optional, free alternative to Gemini for long-context QA)</label>
+        <div class="row">
+          <input type="password" id="groq-key" placeholder="Paste Groq key (get one at console.groq.com)" autocomplete="off" />
+          <button data-save="groq">Save</button>
+        </div>
+        <div class="status" id="groq-status"></div>
+
+        <details style="margin-top: 18px;">
+          <summary style="cursor: pointer; font-size: 13px; color: var(--violet-2); font-weight: 600;">Advanced reasoning options</summary>
+          <div style="margin-top: 12px;">
+            <div class="grid-2">
+              <div>
+                <label for="qa-engine">Question-answering engine</label>
+                <select id="qa-engine">
+                  <option value="sarvam" selected>Sarvam-105b (fast, retrieval-based)</option>
+                  <option value="gemini-pro">Gemini Flash (latest) (2M context, no retrieval loss)</option>
+                  <option value="groq">Groq Llama 3.3 70B (free, 128K context, no retrieval loss)</option>
+                </select>
+              </div>
+              <div>
+                <label for="rewrite-toggle-select">Query rewriting</label>
+                <select id="rewrite-toggle-select">
+                  <option value="on" selected>On (better recall)</option>
+                  <option value="off">Off (single query)</option>
+                </select>
+              </div>
+            </div>
+            <div style="font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5;">
+              Gemini Pro sends the entire lecture on every question, so nothing gets missed by retrieval, but requires a Gemini key and is slower. Query rewriting asks the LLM to paraphrase your question into three variants before searching, catching phrasing mismatches. Cohere rerank (when a key is saved) picks the strongest chunks from the wide BM25 net using a cross-encoder.
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+      </div>
+    </div>
+
+    <!-- LANGUAGE STRIP -->
+    <div class="lang-strip">
+      <div class="lang-picker">
+        <label for="src-lang" data-i18n="qLangLabel">Question language</label>
+        <select id="src-lang">
+          <option value="unknown" selected data-i18n="autoDetect">Auto-detect</option>
+          <option value="en-IN">English (India)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="bn-IN">Bengali</option>
+          <option value="gu-IN">Gujarati</option>
+          <option value="kn-IN">Kannada</option>
+          <option value="ml-IN">Malayalam</option>
+          <option value="mr-IN">Marathi</option>
+          <option value="od-IN">Odia</option>
+          <option value="pa-IN">Punjabi</option>
+          <option value="ta-IN">Tamil</option>
+          <option value="te-IN">Telugu</option>
+        </select>
+      </div>
+      <div class="lang-picker">
+        <label for="answer-lang" data-i18n="aLangLabel">Answer language</label>
+        <select id="answer-lang">
+          <option value="auto" selected data-i18n="sameAsQuestion">Same as question</option>
+          <option value="en-IN">English</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="bn-IN">Bengali</option>
+          <option value="gu-IN">Gujarati</option>
+          <option value="kn-IN">Kannada</option>
+          <option value="ml-IN">Malayalam</option>
+          <option value="mr-IN">Marathi</option>
+          <option value="od-IN">Odia</option>
+          <option value="pa-IN">Punjabi</option>
+          <option value="ta-IN">Tamil</option>
+          <option value="te-IN">Telugu</option>
+        </select>
+      </div>
+      <div class="lang-picker">
+        <label for="tts-voice" data-i18n="voiceLabel">Answer voice</label>
+        <select id="tts-voice">
+          <option value="anushka" selected>Anushka (female)</option>
+          <option value="abhilash">Abhilash (male)</option>
+          <option value="manisha">Manisha (female)</option>
+          <option value="vidya">Vidya (female)</option>
+          <option value="arya">Arya (female)</option>
+          <option value="karun">Karun (male)</option>
+          <option value="hitesh">Hitesh (male)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="workspace">
+    <!-- SOURCE -->
+    <section class="card">
+      <div class="card-head">
+        <h2 data-i18n="sourceHeading">Lecture Source</h2>
+        <span class="card-hint" data-i18n="sourceHint">URL, file, or pasted text</span>
+      </div>
+
+      <label for="video-url" data-i18n="videoUrlLabel">Public video URL (YouTube, Vimeo, Dailymotion, direct .mp4, and more)</label>
+      <div class="row">
+        <input type="url" id="video-url" data-i18n-ph="videoUrlPh" placeholder="https://..." />
+        <button id="load-url" data-i18n="loadBtn">Load</button>
+      </div>
+      <div class="status" id="url-status"></div>
+
+      <div class="divider" data-i18n="orUploadFile">or upload a lecture file</div>
+
+      <label for="file-upload" data-i18n="fileLabel">Audio or video file (mp3, wav, m4a, mp4, mov, webm, mkv, and more)</label>
+      <div class="row">
+        <input type="file" id="file-upload" accept="audio/*,video/*,.mp3,.wav,.m4a,.mp4,.mov,.webm,.mkv,.flac,.ogg" />
+        <button id="load-file" data-i18n="loadFileBtn">Load</button>
+      </div>
+      <div class="status" id="file-status"></div>
+
+      <div class="divider" data-i18n="orPasteText">or paste text</div>
+
+      <label for="manual-transcript" data-i18n="pasteLabel">Paste a transcript</label>
+      <textarea id="manual-transcript" data-i18n-ph="pastePh" placeholder="Paste the lecture transcript here..."></textarea>
+      <div class="row" style="margin-top:8px;">
+        <button id="load-manual" class="secondary" data-i18n="useThisText">Use this text</button>
+      </div>
+
+      <input type="checkbox" id="use-vision" style="display:none;" />
+      <div id="vision-row" style="display:none;"></div>
+
+      <div class="divider" data-i18n="attachPrereads">attach pre-reads (optional)</div>
+
+      <label for="preread-url" data-i18n="prereadLabel">Reading materials linked to this lecture (papers, articles, PDFs)</label>
+      <div class="row">
+        <input type="url" id="preread-url" data-i18n-ph="prereadUrlPh" placeholder="Paste a URL to an article or PDF" />
+        <button id="add-preread-url" class="secondary" data-i18n="addUrl">Add URL</button>
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <input type="file" id="preread-file" accept=".pdf,.html,.htm,.txt,.md" />
+        <button id="add-preread-file" class="secondary" data-i18n="addFile">Add File</button>
+      </div>
+      <div class="status" id="preread-status"></div>
+      <div id="preread-list" style="margin-top: 12px;"></div>
+      <div id="preread-suggestions" style="margin-top: 12px; display: none;"></div>
+
+      <div id="loaded-summary" style="display:none;"></div>
+    </section>
+
+    <!-- CHAT -->
+    <section class="card">
+      <div class="card-head">
+        <h2 data-i18n="askHeading">Ask Vidya</h2>
+        <button class="subtle-link" id="clear-chat" data-i18n="clearChat">Clear chat</button>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+      <div class="input-area">
+        <label for="question" data-i18n="yourQuestion">Your question</label>
+        <textarea id="question" data-i18n-ph="questionPh" placeholder="Type here, or use the microphone to speak."></textarea>
+        <div class="input-tools">
+          <button id="record-btn" class="record"><span class="dot"></span> <span data-i18n="recordBtn">Record</span></button>
+          <button id="ask-btn" data-i18n="askBtn">Ask Vidya</button>
+          <button id="quiz-btn" class="secondary" data-i18n="quizBtn">Take a quiz</button>
+          <button id="clear-input" class="ghost" data-i18n="clearInput">Clear input</button>
+          <div class="status" id="ask-status" style="margin-top:0; flex:1;"></div>
+        </div>
+      </div>
+    </section>
+    </div><!-- /.workspace -->
+
+    <div class="footer">
+      Runs locally on your machine. Your keys, lecture, and chat stay on this computer except when calling <a href="https://sarvam.ai" target="_blank" rel="noopener">Sarvam AI</a> or Gemini.
+    </div>
+  </div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const STORAGE_KEYS = {
+  timeline: "vidya:timeline",
+  history: "vidya:history",
+  meta: "vidya:meta",
+  qaEngine: "vidya:qa_engine",
+  rewriting: "vidya:query_rewriting",
+  srcLang: "vidya:src_lang",
+  answerLang: "vidya:answer_lang",
+  ttsVoice: "vidya:tts_voice",
+};
+
+let TIMELINE = null;    // array of {start, type, text}
+let HISTORY = [];       // [{question, answer, quote, timestamp, blocked}]
+let META = null;        // {title, method, duration_sec, words}
+
+function setStatus(el, msg, kind) {
+  el.textContent = msg || "";
+  el.className = "status" + (kind ? " " + kind : "");
+}
+function setWorking(el, msg) {
+  el.innerHTML = '<span class="spinner"></span>' + msg;
+  el.className = "status";
+}
+
+// -------- Persistence --------
+function saveState() {
+  try {
+    if (TIMELINE) localStorage.setItem(STORAGE_KEYS.timeline, JSON.stringify(TIMELINE));
+    localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(HISTORY));
+    if (META) localStorage.setItem(STORAGE_KEYS.meta, JSON.stringify(META));
+  } catch (e) {}
+}
+function restoreState() {
+  // Fresh session on every refresh: drop last lecture, chat, and meta.
+  // Preferences (language, engine, voice) still restore separately.
+  TIMELINE = null;
+  HISTORY = [];
+  META = null;
+  try {
+    localStorage.removeItem(STORAGE_KEYS.timeline);
+    localStorage.removeItem(STORAGE_KEYS.history);
+    localStorage.removeItem(STORAGE_KEYS.meta);
+  } catch (e) {}
+}
+function clearLoaded() {
+  TIMELINE = null;
+  META = null;
+  HISTORY = [];
+  localStorage.removeItem(STORAGE_KEYS.timeline);
+  localStorage.removeItem(STORAGE_KEYS.history);
+  localStorage.removeItem(STORAGE_KEYS.meta);
+}
+
+// -------- Keys --------
+async function refreshKeyStatus() {
+  try {
+    const r = await fetch("/api/key-status");
+    const j = await r.json();
+    $("sarvam-dot").className = "status-dot " + (j.has_sarvam ? "ok" : "err");
+    $("gemini-dot").className = "status-dot " + (j.has_gemini ? "ok" : "");
+    $("cohere-dot").className = "status-dot " + (j.has_cohere ? "ok" : "");
+    $("sarvam-chip").title = j.has_sarvam ? "Sarvam key saved" : "No Sarvam key";
+    $("gemini-chip").title = j.has_gemini ? "Gemini key saved" : "Gemini key not set (visuals disabled)";
+    $("cohere-chip").title = j.has_cohere ? "Cohere key saved (rerank on)" : "Cohere key not set (rerank off)";
+    updateVisionToggle(j.has_gemini);
+    updateEngineOptions(j.has_gemini, j.has_groq);
+    updateSetupVisibility(j);
+    return j;
+  } catch {
+    return {has_sarvam: false, has_gemini: false, has_cohere: false};
+  }
+}
+function updateSetupVisibility(j) {
+  // Setup card now lives inside the settings modal, opened by the gear icon
+  // in the top bar. No inline show/hide logic needed anymore.
+}
+function updateEngineOptions(hasGemini, hasGroq) {
+  const sel = $("qa-engine");
+  if (!sel) return;
+  const proOpt = sel.querySelector('option[value="gemini-pro"]');
+  const groqOpt = sel.querySelector('option[value="groq"]');
+  if (proOpt) {
+    if (hasGemini) {
+      proOpt.disabled = false;
+      proOpt.textContent = "Gemini Flash (latest) (2M context, no retrieval loss)";
+    } else {
+      proOpt.disabled = true;
+      proOpt.textContent = "Gemini Flash (latest) (needs Gemini key)";
+      if (sel.value === "gemini-pro") sel.value = "sarvam";
+    }
+  }
+  if (groqOpt) {
+    if (hasGroq) {
+      groqOpt.disabled = false;
+      groqOpt.textContent = "Groq Llama 3.3 70B (free, 128K context)";
+    } else {
+      groqOpt.disabled = true;
+      groqOpt.textContent = "Groq Llama 3.3 70B (needs Groq key)";
+      if (sel.value === "groq") sel.value = "sarvam";
+    }
+  }
+}
+function updateVisionToggle(hasGemini) {
+  const row = $("vision-row");
+  const cb = $("use-vision");
+  if (hasGemini) {
+    row.classList.remove("disabled");
+    cb.disabled = false;
+  } else {
+    row.classList.add("disabled");
+    cb.disabled = true;
+    cb.checked = false;
+  }
+}
+document.querySelectorAll("button[data-save]").forEach((btn) => {
+  btn.onclick = async () => {
+    const which = btn.dataset.save;
+    const input = $(which + "-key");
+    const status = $(which + "-status");
+    const key = input.value.trim();
+    if (!key) { setStatus(status, "Paste a key first.", "err"); return; }
+    setWorking(status, "Saving...");
+    try {
+      const r = await fetch("/api/set-key", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({which, api_key: key}),
+      });
+      const j = await r.json();
+      if (r.ok) {
+        input.value = "";
+        setStatus(status, "Saved.", "ok");
+        await refreshKeyStatus();
+      } else {
+        setStatus(status, j.error || "Failed.", "err");
+      }
+    } catch (e) {
+      setStatus(status, "Network error: " + e.message, "err");
+    }
+  };
+});
+$("toggle-setup").onclick = () => {
+  const body = $("setup-body");
+  const btn = $("toggle-setup");
+  if (body.style.display === "none") {
+    body.style.display = "";
+    btn.textContent = "Hide";
+  } else {
+    body.style.display = "none";
+    btn.textContent = "Show";
+  }
+};
+function setCartoonSpeaking(_speaking) { /* no visual animation */ }
+
+// ---- Quiz mode ----
+let QUIZ = null;
+async function startQuiz() {
+  if (!TIMELINE || TIMELINE.length === 0) {
+    setStatus($("ask-status"), t("loadFirst") || "Load a lecture first.", "err");
+    return;
+  }
+  $("quiz-modal").style.display = "flex";
+  $("quiz-loading").style.display = "";
+  $("quiz-content").style.display = "none";
+  $("quiz-content").innerHTML = "";
+  const answerLang = ($("answer-lang") && $("answer-lang").value) || "auto";
+  try {
+    const r = await fetch("/api/quiz", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({timeline: TIMELINE, num_questions: 5, language: answerLang}),
+    });
+    const j = await r.json();
+    if (j.quiz_unavailable) {
+      $("quiz-loading").innerHTML =
+        '<div style="padding: 30px 24px; text-align: center; color: var(--text-2); font-size: 14px; line-height: 1.65;">' +
+        escapeHtml(j.error) +
+        '</div>' +
+        '<div style="display: flex; justify-content: center; margin-top: 4px;">' +
+        '<button class="secondary" id="quiz-graceful-close" style="padding: 8px 18px; font-size: 13px;">Close</button>' +
+        '</div>';
+      const cb = $("quiz-graceful-close");
+      if (cb) cb.onclick = () => { $("quiz-modal").style.display = "none"; };
+      return;
+    }
+    if (!r.ok || !Array.isArray(j.questions) || j.questions.length === 0) {
+      $("quiz-loading").innerHTML =
+        '<div style="padding: 30px 24px; text-align: center; color: var(--text-2); font-size: 14px; line-height: 1.65;">' +
+        escapeHtml(j.error || "Vidya could not prepare a quiz at the moment. Please try again shortly.") +
+        '</div>' +
+        '<div style="display: flex; justify-content: center; margin-top: 4px;">' +
+        '<button class="secondary" id="quiz-generic-close" style="padding: 8px 18px; font-size: 13px;">Close</button>' +
+        '</div>';
+      const cb = $("quiz-generic-close");
+      if (cb) cb.onclick = () => { $("quiz-modal").style.display = "none"; };
+      return;
+    }
+    QUIZ = {questions: j.questions, idx: 0, score: 0};
+    $("quiz-loading").style.display = "none";
+    $("quiz-content").style.display = "";
+    renderQuizQuestion();
+  } catch (e) {
+    $("quiz-loading").innerHTML = '<div style="color: var(--err); padding: 20px;">Network error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+function renderQuizQuestion() {
+  const box = $("quiz-content");
+  if (!QUIZ) return;
+  const q = QUIZ.questions[QUIZ.idx];
+  const total = QUIZ.questions.length;
+  box.innerHTML = `
+    <div class="quiz-header">
+      <span class="quiz-progress">Question ${QUIZ.idx + 1} of ${total}</span>
+      <span class="quiz-score">Score: ${QUIZ.score} / ${QUIZ.idx}</span>
+    </div>
+    <div class="quiz-question">${escapeHtml(q.question)}</div>
+    <div id="quiz-options"></div>
+    <div id="quiz-feedback" style="display:none;"></div>
+    <div id="quiz-next" style="display:none;" class="quiz-actions">
+      <button id="quiz-next-btn">${QUIZ.idx + 1 < total ? "Next question" : "See score"}</button>
+    </div>
+  `;
+  const optsBox = $("quiz-options");
+  q.options.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.className = "quiz-option";
+    b.textContent = String.fromCharCode(65 + i) + ".  " + opt;
+    b.onclick = () => submitAnswer(i);
+    optsBox.appendChild(b);
+  });
+  if (window.renderMathInElement) {
+    try {
+      renderMathInElement(box, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true},
+        ],
+        throwOnError: false,
+      });
+    } catch (e) {}
+  }
+}
+function submitAnswer(picked) {
+  const q = QUIZ.questions[QUIZ.idx];
+  const correct = q.correct_index;
+  const opts = document.querySelectorAll(".quiz-option");
+  opts.forEach((b, i) => {
+    b.disabled = true;
+    if (i === correct) b.classList.add("correct");
+    if (i === picked && picked !== correct) b.classList.add("incorrect");
+  });
+  const wasRight = picked === correct;
+  if (wasRight) QUIZ.score += 1;
+  const fb = $("quiz-feedback");
+  fb.style.display = "block";
+  fb.className = "quiz-feedback " + (wasRight ? "correct" : "incorrect");
+  let html = "<strong>" + (wasRight ? "Correct." : "Not quite.") + "</strong> " + escapeHtml(q.explanation || "");
+  if (q.supporting_quote) {
+    const cite = q.citation ? ` <span style="color: var(--violet-2); font-weight: 700; font-style: normal; margin-left: 4px;">[${escapeHtml(q.citation)}]</span>` : "";
+    html += `<div class="qf-quote">"${escapeHtml(q.supporting_quote)}"${cite}</div>`;
+  }
+  fb.innerHTML = html;
+  $("quiz-next").style.display = "flex";
+  $("quiz-next-btn").onclick = () => {
+    if (QUIZ.idx + 1 < QUIZ.questions.length) {
+      QUIZ.idx += 1;
+      renderQuizQuestion();
+    } else {
+      showQuizFinal();
+    }
+  };
+}
+function showQuizFinal() {
+  const box = $("quiz-content");
+  const total = QUIZ.questions.length;
+  const pct = Math.round((QUIZ.score / total) * 100);
+  const msg = pct >= 80 ? "Excellent work." : pct >= 60 ? "Solid effort." : pct >= 40 ? "Good try. Review the tricky ones." : "Time to revisit the lecture together.";
+  box.innerHTML = `
+    <div class="quiz-final">
+      <h3>${QUIZ.score} / ${total}</h3>
+      <p style="font-size: 18px;">${pct}%</p>
+      <p>${msg}</p>
+      <div class="quiz-actions" style="justify-content: center; margin-top: 20px;">
+        <button id="quiz-retry">Take another quiz</button>
+        <button id="quiz-close" class="secondary">Done</button>
+      </div>
+    </div>
+  `;
+  $("quiz-retry").onclick = startQuiz;
+  $("quiz-close").onclick = () => { $("quiz-modal").style.display = "none"; };
+}
+$("quiz-btn").onclick = startQuiz;
+$("close-quiz").onclick = () => { $("quiz-modal").style.display = "none"; };
+$("quiz-modal").addEventListener("click", (e) => {
+  if (e.target === $("quiz-modal")) $("quiz-modal").style.display = "none";
+});
+
+function openSettings() {
+  const m = $("settings-modal");
+  if (m) m.style.display = "flex";
+}
+function closeSettings() {
+  const m = $("settings-modal");
+  if (m) m.style.display = "none";
+}
+$("open-settings").onclick = openSettings;
+$("close-settings").onclick = closeSettings;
+$("settings-modal").addEventListener("click", (e) => {
+  if (e.target === $("settings-modal")) closeSettings();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeSettings();
+});
+
+// -------- Source loading --------
+function formatDuration(sec) {
+  if (!sec || sec < 0) return "";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  return `${m}m ${s}s`;
+}
+function timelineToText(entries) {
+  return entries.map(e => {
+    const t = Math.floor(e.start);
+    const mm = String(Math.floor(t / 60)).padStart(2, "0");
+    const ss = String(t % 60).padStart(2, "0");
+    const kind = e.type === "audio" ? "AUDIO" : "VISUAL";
+    return `[${mm}:${ss}] ${kind}: ${e.text}`;
+  }).join("\n");
+}
+function renderLoadedSummary() {
+  const box = $("loaded-summary");
+  if (!TIMELINE || TIMELINE.length === 0) {
+    box.style.display = "none";
+    return;
+  }
+  const words = TIMELINE.reduce((n, e) => n + e.text.split(/\s+/).length, 0);
+  const audio = TIMELINE.filter(e => e.type === "audio").length;
+  const visual = TIMELINE.filter(e => e.type === "visual").length;
+  const preread = TIMELINE.filter(e => e.type === "preread").length;
+  const title = META?.title || "Lecture loaded";
+  const method = META?.method || "";
+  const dur = META?.duration_sec ? formatDuration(META.duration_sec) : "";
+  const preview = timelineToText(TIMELINE);
+  const partsLine = [];
+  if (audio) partsLine.push(`${audio} audio`);
+  if (visual) partsLine.push(`${visual} visual`);
+  if (preread) partsLine.push(`${preread} pre-read`);
+  const entriesSummary = partsLine.length ? partsLine.join(" + ") + " entries" : "";
+  box.style.display = "block";
+  box.className = "loaded-summary";
+  box.innerHTML = `
+    <div><strong>${escapeHtml(title)}</strong> is ready.</div>
+    <div class="meta">
+      ${dur ? `<span>Duration: ${escapeHtml(dur)}</span>` : ""}
+      <span>${words.toLocaleString()} words</span>
+      ${entriesSummary ? `<span>${entriesSummary}</span>` : ""}
+      ${method ? `<span>Source: ${escapeHtml(method)}</span>` : ""}
+    </div>
+    <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+      <input type="text" id="transcript-search" placeholder="Search inside the transcript..." style="flex: 1 1 240px; min-width: 200px; padding: 8px 12px; font-size: 12.5px;" />
+      <button class="secondary" id="copy-transcript" style="padding: 6px 12px; font-size: 12px;">Copy transcript</button>
+      <button class="ghost" id="drop-loaded" style="padding: 6px 12px; font-size: 12px;">Drop this lecture</button>
+    </div>
+    <div style="margin-top: 10px; font-size: 11px; color: var(--muted);" id="search-count"></div>
+    <details style="margin-top: 6px;">
+      <summary>Show full transcript (${TIMELINE.length} entries)</summary>
+      <pre id="transcript-preview" style="max-height: 480px;">${escapeHtml(preview)}</pre>
+    </details>
+  `;
+  const previewText = preview;
+  $("drop-loaded").onclick = () => {
+    if (!confirm("Drop the loaded lecture and all its chat history?")) return;
+    clearLoaded();
+    renderLoadedSummary();
+    renderPrereadList();
+    renderChat();
+  };
+  $("copy-transcript").onclick = async () => {
+    const btn = $("copy-transcript");
+    try {
+      await navigator.clipboard.writeText(previewText);
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy transcript"; }, 1500);
+    } catch {
+      btn.textContent = "Copy failed";
+      setTimeout(() => { btn.textContent = "Copy transcript"; }, 1500);
+    }
+  };
+  $("transcript-search").oninput = (e) => {
+    const term = e.target.value.trim();
+    const target = $("transcript-preview");
+    const count = $("search-count");
+    if (!term) {
+      target.innerHTML = escapeHtml(previewText);
+      count.textContent = "";
+      return;
+    }
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(escapedTerm, "gi");
+    const matches = previewText.match(re);
+    const n = matches ? matches.length : 0;
+    count.textContent = n === 0 ? "No matches." : n + " match" + (n === 1 ? "" : "es") + " for \"" + term + "\".";
+    const parts = previewText.split(new RegExp("(" + escapedTerm + ")", "gi"));
+    target.innerHTML = parts.map((p, i) =>
+      i % 2 === 1 ? "<mark>" + escapeHtml(p) + "</mark>" : escapeHtml(p)
+    ).join("");
+    // Scroll to first match
+    const firstMark = target.querySelector("mark");
+    if (firstMark) firstMark.scrollIntoView({block: "center", behavior: "smooth"});
+  };
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function loadUrl() {
+  const url = $("video-url").value.trim();
+  const el = $("url-status");
+  if (!url) { setStatus(el, "Paste a URL first.", "err"); return; }
+  const useVision = $("use-vision").checked;
+  const msg = useVision
+    ? "Downloading video, transcribing audio with Sarvam Saarika, and describing frames with Gemini. This can take a few minutes."
+    : "Downloading audio and transcribing with Sarvam Saarika. This can take a few minutes.";
+  setWorking(el, msg);
+  try {
+    const r = await fetch("/api/video-url", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        url,
+        use_vision: useVision,
+        language_code: $("src-lang").value,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) { setStatus(el, j.error || "Failed.", "err"); return; }
+    TIMELINE = j.timeline || [];
+    META = {
+      title: j.title || "Lecture from URL",
+      method: j.method,
+      duration_sec: j.duration_sec,
+    };
+    HISTORY = [];
+    saveState();
+    renderLoadedSummary();
+    renderPrereadList();
+    renderSuggestions(j.suggested_prereads, j.suggested_prereads_filtered_out);
+    renderChat();
+    const warnings = (j.warnings || []).join(" ");
+    let msg = "Loaded. " + warnings;
+    if (Array.isArray(j.audio_chunk_errors) && j.audio_chunk_errors.length) {
+      msg += " First failure: " + j.audio_chunk_errors[0];
+    }
+    setStatus(el, msg, warnings ? "warn" : "ok");
+  } catch (e) {
+    setStatus(el, "Network error: " + e.message, "err");
+  }
+}
+
+async function loadFile() {
+  const input = $("file-upload");
+  const el = $("file-status");
+  const file = input.files && input.files[0];
+  if (!file) { setStatus(el, "Choose a file first.", "err"); return; }
+  const useVision = $("use-vision").checked;
+  const sizeMB = (file.size / (1024*1024)).toFixed(1);
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  fd.append("language_code", $("src-lang").value);
+  fd.append("use_vision", String(useVision));
+
+  setWorking(el, `Uploading ${sizeMB} MB, then transcribing${useVision ? " and describing visuals" : ""}. This can take a few minutes.`);
+  try {
+    const r = await fetch("/api/transcribe-file", {method: "POST", body: fd});
+    const j = await r.json();
+    if (!r.ok) { setStatus(el, j.error || "Failed.", "err"); return; }
+    TIMELINE = j.timeline || [];
+    META = {
+      title: file.name,
+      method: useVision ? "sarvam-stt+gemini-vision" : "sarvam-stt",
+      duration_sec: j.duration_sec,
+    };
+    HISTORY = [];
+    saveState();
+    renderLoadedSummary();
+    renderPrereadList();
+    renderChat();
+    const warnings = (j.warnings || []).join(" ");
+    let msg = "Loaded. " + warnings;
+    if (Array.isArray(j.audio_chunk_errors) && j.audio_chunk_errors.length) {
+      msg += " First failure: " + j.audio_chunk_errors[0];
+    }
+    setStatus(el, msg, warnings ? "warn" : "ok");
+  } catch (e) {
+    setStatus(el, "Network error: " + e.message, "err");
+  }
+}
+
+function loadManual() {
+  const text = $("manual-transcript").value.trim();
+  if (!text) return;
+  TIMELINE = [{start: 0, type: "audio", text}];
+  META = {title: "Pasted text", method: "manual"};
+  HISTORY = [];
+  saveState();
+  renderLoadedSummary();
+  renderPrereadList();
+  renderChat();
+  $("manual-transcript").value = "";
+}
+
+$("load-url").onclick = loadUrl;
+$("load-file").onclick = loadFile;
+$("load-manual").onclick = loadManual;
+
+// -------- Pre-reads --------
+async function addPrereadUrl(urlOverride) {
+  const url = (urlOverride || $("preread-url").value).trim();
+  const status = $("preread-status");
+  if (!url) { setStatus(status, "Paste a URL first.", "err"); return; }
+  setWorking(status, "Fetching " + url + " ...");
+  try {
+    const r = await fetch("/api/preread", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({url}),
+    });
+    const j = await r.json();
+    if (!r.ok) { setStatus(status, j.error || "Failed.", "err"); return; }
+    if (!TIMELINE) TIMELINE = [];
+    TIMELINE = TIMELINE.concat(j.entries || []);
+    saveState();
+    renderPrereadList();
+    renderLoadedSummary();
+    if (!urlOverride) $("preread-url").value = "";
+    setStatus(status, `Added ${j.chunks} chunks (${j.words.toLocaleString()} words) from ${shortenSource(j.source)}.` + (j.truncated ? " Text was truncated." : ""), "ok");
+  } catch (e) {
+    setStatus(status, "Network error: " + e.message, "err");
+  }
+}
+
+async function addPrereadFile() {
+  const input = $("preread-file");
+  const status = $("preread-status");
+  const file = input.files && input.files[0];
+  if (!file) { setStatus(status, "Choose a file first.", "err"); return; }
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  setWorking(status, "Reading " + file.name + " ...");
+  try {
+    const r = await fetch("/api/preread", {method: "POST", body: fd});
+    const j = await r.json();
+    if (!r.ok) { setStatus(status, j.error || "Failed.", "err"); return; }
+    if (!TIMELINE) TIMELINE = [];
+    TIMELINE = TIMELINE.concat(j.entries || []);
+    saveState();
+    renderPrereadList();
+    renderLoadedSummary();
+    input.value = "";
+    setStatus(status, `Added ${j.chunks} chunks (${j.words.toLocaleString()} words) from ${j.source}.` + (j.truncated ? " Text was truncated." : ""), "ok");
+  } catch (e) {
+    setStatus(status, "Network error: " + e.message, "err");
+  }
+}
+
+function removePreread(source) {
+  if (!TIMELINE) return;
+  TIMELINE = TIMELINE.filter(e => !(e.type === "preread" && e.source === source));
+  if (TIMELINE.length === 0) TIMELINE = null;
+  saveState();
+  renderPrereadList();
+  renderLoadedSummary();
+}
+
+function shortenSource(src) {
+  if (!src) return "";
+  if (src.length <= 55) return src;
+  return src.slice(0, 30) + "..." + src.slice(-22);
+}
+
+function renderPrereadList() {
+  const box = $("preread-list");
+  const prereads = (TIMELINE || []).filter(e => e.type === "preread");
+  if (prereads.length === 0) { box.innerHTML = ""; return; }
+  const grouped = {};
+  for (const e of prereads) {
+    if (!grouped[e.source]) grouped[e.source] = 0;
+    grouped[e.source] += 1;
+  }
+  let html = '<div class="preread-header">Attached pre-reads</div>';
+  for (const [src, count] of Object.entries(grouped)) {
+    html += `<div class="preread-item">
+      <span class="src" title="${escapeHtml(src)}">${escapeHtml(shortenSource(src))} <span style="color: var(--muted);">(${count} chunk${count === 1 ? "" : "s"})</span></span>
+      <button class="secondary" data-src="${escapeHtml(src)}">Remove</button>
+    </div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("button[data-src]").forEach(btn => {
+    btn.onclick = () => removePreread(btn.dataset.src);
+  });
+}
+
+function renderSuggestions(items, filteredOut) {
+  const box = $("preread-suggestions");
+  const normalized = (items || []).map(x => {
+    if (typeof x === "string") return {url: x, label: x};
+    if (x && typeof x === "object" && x.url) return {url: x.url, label: x.label || x.url};
+    return null;
+  }).filter(x => x && typeof x.url === "string" && x.url.length > 6);
+  if (normalized.length === 0) { box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "block";
+  let html = '<div class="preread-header">Suggested pre-reads from description</div>';
+  normalized.forEach((item, i) => {
+    const sameAsUrl = item.label === item.url;
+    html += `<div class="preread-suggestion">
+      <input type="checkbox" id="sug-${i}" data-url="${escapeHtml(item.url)}" checked />
+      <label for="sug-${i}" title="${escapeHtml(item.url)}">
+        <div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.label)}</div>
+        ${sameAsUrl ? "" : `<div style="font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.url)}</div>`}
+      </label>
+    </div>`;
+  });
+  const filteredNote = filteredOut && filteredOut > 0
+    ? `<div style="font-size: 11px; color: var(--muted); margin-top: 4px; font-style: italic;">Vidya filtered out ${filteredOut} link${filteredOut === 1 ? "" : "s"} that looked like social, subscribe, or merch.</div>`
+    : "";
+  html += filteredNote;
+  html += '<div style="margin-top: 10px; display: flex; gap: 6px;"><button id="add-selected-sug" class="secondary" style="padding: 6px 12px; font-size: 12px;">Add selected as pre-reads</button><button id="dismiss-sug" class="ghost" style="padding: 6px 12px; font-size: 12px;">Dismiss all</button></div>';
+  box.innerHTML = html;
+  $("add-selected-sug").onclick = async () => {
+    const checked = Array.from(box.querySelectorAll("input:checked"));
+    if (checked.length === 0) return;
+    for (const cb of checked) {
+      await addPrereadUrl(cb.dataset.url);
+    }
+    box.style.display = "none";
+  };
+  $("dismiss-sug").onclick = () => { box.style.display = "none"; box.innerHTML = ""; };
+}
+
+$("add-preread-url").onclick = () => addPrereadUrl();
+$("add-preread-file").onclick = addPrereadFile;
+
+// -------- Chat rendering --------
+function renderChat() {
+  const box = $("messages");
+  box.innerHTML = "";
+  for (const item of HISTORY) {
+    box.appendChild(renderMsg({role: "student", text: item.question}));
+    box.appendChild(renderMsg({
+      role: "tutor",
+      text: item.answer,
+      quote: item.quote,
+      timestamp: item.timestamp,
+      citation: item.citation,
+      citation_type: item.citation_type,
+      blocked: item.blocked,
+      guardrail: item.guardrail,
+      usedRetrieval: item.usedRetrieval,
+      rawPreview: item.rawPreview,
+      blockedAnswer: item.blockedAnswer,
+      blockedQuote: item.blockedQuote,
+      retrievedPreview: item.retrievedPreview,
+      retrievedCount: item.retrievedCount,
+      totalCount: item.totalCount,
+      retrievedPrereadCount: item.retrievedPrereadCount,
+      totalPrereadCount: item.totalPrereadCount,
+      engine: item.engine,
+      engineNote: item.engineNote,
+      retrievalStrategy: item.retrievalStrategy,
+      queryVariants: item.queryVariants,
+      cohereReranked: item.cohereReranked,
+      supportingQuotes: item.supportingQuotes,
+      verifiedQuoteCount: item.verifiedQuoteCount,
+      attemptedQuoteCount: item.attemptedQuoteCount,
+    }));
+  }
+  box.scrollTop = box.scrollHeight;
+}
+function renderMsg(m) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + m.role + (m.blocked ? " blocked" : "");
+  const col = document.createElement("div");
+  col.style.flex = "1 1 auto";
+  col.style.minWidth = "0";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = m.text || "";
+  col.appendChild(bubble);
+  // KaTeX render on tutor bubbles (math in dollar-sign delimiters).
+  if (m.role === "tutor" && window.renderMathInElement) {
+    try {
+      renderMathInElement(bubble, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true},
+        ],
+        throwOnError: false,
+      });
+    } catch (e) {}
+  }
+
+  if (m.role === "tutor") {
+    const below = document.createElement("div");
+    below.className = "below";
+    const quoteList = (m.supportingQuotes && m.supportingQuotes.length)
+      ? m.supportingQuotes
+      : (m.quote ? [{quote: m.quote, citation: m.citation || m.timestamp, citation_type: m.citation_type}] : []);
+    if (quoteList.length) {
+      const evidenceWrap = document.createElement("div");
+      const toggle = document.createElement("button");
+      toggle.className = "subtle-link";
+      toggle.style.fontSize = "12px";
+      toggle.style.marginBottom = "6px";
+      const wrapEvidence = document.createElement("div");
+      wrapEvidence.style.display = "none";
+      wrapEvidence.style.flexDirection = "column";
+      wrapEvidence.style.gap = "6px";
+      toggle.textContent = "Show evidence (" + quoteList.length + ")";
+      toggle.onclick = (e) => {
+        e.preventDefault();
+        const hidden = wrapEvidence.style.display === "none";
+        wrapEvidence.style.display = hidden ? "flex" : "none";
+        toggle.textContent = hidden
+          ? "Hide evidence"
+          : "Show evidence (" + quoteList.length + ")";
+      };
+      evidenceWrap.appendChild(toggle);
+      evidenceWrap.appendChild(wrapEvidence);
+      quoteList.forEach((qi, idx) => {
+        const q = document.createElement("div");
+        q.className = "quote-box";
+        const lbl = document.createElement("div");
+        lbl.className = "quote-label";
+        const prefix = quoteList.length > 1 ? `Evidence ${idx + 1} of ${quoteList.length} · ` : "";
+        if (qi.citation_type === "preread" && qi.citation) {
+          lbl.innerHTML = `${prefix}From pre-read <span class="ts" title="${escapeHtml(qi.citation)}">${escapeHtml(shortenSource(qi.citation))}</span>`;
+        } else if (qi.citation) {
+          lbl.innerHTML = `${prefix}From the lecture <span class="ts">${escapeHtml(qi.citation)}</span>`;
+        } else {
+          lbl.innerHTML = `${prefix}From the lecture`;
+        }
+        const txt = document.createElement("div");
+        txt.textContent = qi.quote || "";
+        q.appendChild(lbl);
+        q.appendChild(txt);
+        wrapEvidence.appendChild(q);
+      });
+      below.appendChild(evidenceWrap);
+    }
+    const badgeRow = document.createElement("div");
+    if (m.blocked) {
+      const b = document.createElement("span");
+      b.className = "badge blocked";
+      b.textContent = badgeTextFor(m.guardrail);
+      badgeRow.appendChild(b);
+    } else {
+      const b = document.createElement("span");
+      b.className = "badge ok";
+      const n = m.verifiedQuoteCount || (m.supportingQuotes ? m.supportingQuotes.length : 0);
+      if (n > 1) {
+        b.textContent = "Grounded on " + n + " sources";
+      } else {
+        b.textContent = "Grounded and verified";
+      }
+      badgeRow.appendChild(b);
+    }
+    if (m.engine === "gemini-pro") {
+      const e = document.createElement("span");
+      e.className = "badge retrieval";
+      e.textContent = "Gemini Flash (latest) long-context";
+      badgeRow.appendChild(e);
+    } else if (m.usedRetrieval) {
+      const r = document.createElement("span");
+      r.className = "badge retrieval";
+      let label = "BM25 retrieval";
+      if (m.cohereReranked) label = "BM25 + Cohere rerank";
+      if (m.queryVariants && m.queryVariants.length > 1) {
+        label += " · " + m.queryVariants.length + " query variants";
+      }
+      r.textContent = label;
+      badgeRow.appendChild(r);
+    }
+    below.appendChild(badgeRow);
+
+    // Debug details: only visible when the guardrail blocked something.
+    if (m.blocked && (m.rawPreview || m.blockedAnswer || m.blockedQuote)) {
+      const details = document.createElement("details");
+      details.style.marginTop = "6px";
+      const sum = document.createElement("summary");
+      sum.style.cursor = "pointer";
+      sum.style.fontSize = "11px";
+      sum.style.color = "var(--muted)";
+      sum.textContent = "Show what the model returned (debug)";
+      details.appendChild(sum);
+      const pre = document.createElement("pre");
+      pre.style.whiteSpace = "pre-wrap";
+      pre.style.fontSize = "11px";
+      pre.style.background = "rgba(15, 23, 42, 0.04)";
+      pre.style.padding = "8px 10px";
+      pre.style.borderRadius = "6px";
+      pre.style.marginTop = "6px";
+      pre.style.maxHeight = "260px";
+      pre.style.overflow = "auto";
+      pre.style.fontFamily = 'ui-monospace, "SF Mono", Monaco, monospace';
+      const parts = [];
+      if (m.rawPreview) parts.push("RAW MODEL OUTPUT:\n" + m.rawPreview);
+      if (m.blockedAnswer) parts.push("MODEL'S ANSWER (blocked):\n" + m.blockedAnswer);
+      if (m.blockedQuote) parts.push("MODEL'S CLAIMED QUOTE (not found in lecture):\n" + m.blockedQuote);
+      pre.textContent = parts.join("\n\n");
+      details.appendChild(pre);
+      below.appendChild(details);
+    }
+
+    if (m.text) {
+      const btns = document.createElement("div");
+      btns.className = "row-buttons";
+      const speak = document.createElement("button");
+      speak.className = "secondary";
+      speak.textContent = "Speak";
+      const pause = document.createElement("button");
+      pause.className = "secondary";
+      pause.textContent = "Pause";
+      pause.style.display = "none";
+      pause.onclick = (e) => { e.stopPropagation(); togglePauseResume(); };
+      speak.onclick = () => speakText(m.text, speak, pause);
+      btns.appendChild(speak);
+      btns.appendChild(pause);
+      below.appendChild(btns);
+    }
+    col.appendChild(below);
+  }
+
+  wrap.appendChild(col);
+  return wrap;
+}
+function badgeTextFor(g) {
+  if (g === "quote_not_in_timeline") return "Blocked (quote not in lecture)";
+  if (g === "in_scope_false") return "Not covered in the lecture";
+  if (g === "no_supporting_quote") return "Blocked (no evidence)";
+  if (g === "model_output_not_json") return "Blocked (malformed model output)";
+  return "Not covered in the lecture";
+}
+
+// -------- Recording --------
+let mediaRecorder = null;
+let recordedChunks = [];
+let recording = false;
+$("record-btn").onclick = async () => {
+  const btn = $("record-btn");
+  const status = $("ask-status");
+  if (!recording) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus(status, "Microphone not supported in this browser.", "err");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "audio/webm"});
+        await transcribeRecording(blob);
+      };
+      mediaRecorder.start();
+      recording = true;
+      btn.classList.add("recording");
+      btn.innerHTML = '<span class="dot"></span> Stop';
+      setStatus(status, "Recording... click Stop when done.");
+    } catch {
+      setStatus(status, "Microphone permission denied.", "err");
+    }
+  } else {
+    mediaRecorder.stop();
+    recording = false;
+    btn.classList.remove("recording");
+    btn.innerHTML = '<span class="dot"></span> Record';
+  }
+};
+async function transcribeRecording(blob) {
+  const status = $("ask-status");
+  setWorking(status, "Transcribing your voice with Sarvam...");
+  const fd = new FormData();
+  fd.append("audio", blob, "recording.webm");
+  fd.append("language_code", $("src-lang").value);
+  try {
+    const r = await fetch("/api/stt", {method: "POST", body: fd});
+    const j = await r.json();
+    if (!r.ok) { setStatus(status, j.error || "STT failed.", "err"); return; }
+    const text = (j.transcript || "").trim();
+    if (!text) { setStatus(status, "No text returned. Try again.", "err"); return; }
+    const q = $("question");
+    q.value = (q.value ? q.value.trim() + " " : "") + text;
+    setStatus(status, "Voice transcribed. Click Ask Vidya.", "ok");
+  } catch (e) {
+    setStatus(status, "Network error: " + e.message, "err");
+  }
+}
+
+// -------- Ask --------
+$("ask-btn").onclick = async () => {
+  const question = $("question").value.trim();
+  const status = $("ask-status");
+  if (!TIMELINE || TIMELINE.length === 0) {
+    setStatus(status, "Load a lecture first.", "err");
+    return;
+  }
+  if (!question) {
+    setStatus(status, "Type or record a question first.", "err");
+    return;
+  }
+  const qaEngine = $("qa-engine").value || "sarvam";
+  const useRewriting = ($("rewrite-toggle-select").value || "on") === "on";
+  const answerLang = $("answer-lang").value || "auto";
+  localStorage.setItem(STORAGE_KEYS.qaEngine, qaEngine);
+  localStorage.setItem(STORAGE_KEYS.rewriting, useRewriting ? "on" : "off");
+  localStorage.setItem(STORAGE_KEYS.answerLang, answerLang);
+  localStorage.setItem(STORAGE_KEYS.srcLang, $("src-lang").value);
+  localStorage.setItem(STORAGE_KEYS.ttsVoice, $("tts-voice").value);
+
+  const workingMsg = qaEngine === "gemini-pro"
+    ? "Gemini Flash (latest) is reading the full lecture..."
+    : "Vidya is thinking...";
+  setWorking(status, workingMsg);
+  $("ask-btn").disabled = true;
+  try {
+    const r = await fetch("/api/ask", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        question,
+        timeline: TIMELINE,
+        history: HISTORY.map(h => ({question: h.question, answer: h.answer})),
+        qa_engine: qaEngine,
+        use_query_rewriting: useRewriting,
+        answer_language: answerLang,
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      setStatus(status, j.error || "Failed.", "err");
+      return;
+    }
+    const blocked = j.guardrail && j.guardrail !== "passed";
+    const item = {
+      question,
+      answer: j.answer,
+      quote: j.supporting_quote || "",
+      timestamp: j.timestamp || "",
+      citation: j.citation || j.timestamp || "",
+      citation_type: j.citation_type || "audio",
+      blocked: blocked && j.guardrail !== "passed",
+      guardrail: j.guardrail,
+      usedRetrieval: !!j.used_retrieval,
+      rawPreview: j.raw_output_preview || "",
+      blockedAnswer: j.blocked_answer || "",
+      blockedQuote: j.blocked_quote || "",
+      retrievedPreview: j.retrieved_context_preview || "",
+      retrievedCount: j.retrieved_entries_count || 0,
+      totalCount: j.total_entries_count || 0,
+      retrievedPrereadCount: j.retrieved_preread_count || 0,
+      totalPrereadCount: j.total_preread_count || 0,
+      engine: j.engine || qaEngine,
+      engineNote: j.engine_note || "",
+      retrievalStrategy: j.retrieval_strategy || "",
+      queryVariants: j.query_variants || [],
+      cohereReranked: !!j.cohere_reranked,
+      supportingQuotes: Array.isArray(j.supporting_quotes) ? j.supporting_quotes : [],
+      verifiedQuoteCount: j.verified_quote_count || 0,
+      attemptedQuoteCount: j.attempted_quote_count || 0,
+    };
+    HISTORY.push(item);
+    saveState();
+    $("question").value = "";
+    renderChat();
+    setStatus(status, "", "");
+    // Fake-stream the newest tutor answer for a livelier feel.
+    const box = $("messages");
+    const bubbles = box.querySelectorAll(".msg.tutor .bubble");
+    const lastBubble = bubbles[bubbles.length - 1];
+    if (lastBubble && item.answer) {
+      const full = item.answer;
+      lastBubble.textContent = "";
+      let i = 0;
+      const step = Math.max(1, Math.ceil(full.length / 80));
+      const iv = setInterval(() => {
+        i = Math.min(i + step, full.length);
+        lastBubble.textContent = full.slice(0, i);
+        box.scrollTop = box.scrollHeight;
+        if (i >= full.length) {
+          clearInterval(iv);
+          if (window.renderMathInElement) {
+            try {
+              renderMathInElement(lastBubble, {
+                delimiters: [
+                  {left: "$$", right: "$$", display: true},
+                  {left: "$", right: "$", display: false},
+                  {left: "\\(", right: "\\)", display: false},
+                  {left: "\\[", right: "\\]", display: true},
+                ],
+                throwOnError: false,
+              });
+            } catch (e) {}
+          }
+        }
+      }, 22);
+    }
+  } catch (e) {
+    setStatus(status, "Network error: " + e.message, "err");
+  } finally {
+    $("ask-btn").disabled = false;
+  }
+};
+$("clear-input").onclick = () => { $("question").value = ""; setStatus($("ask-status"), "", ""); };
+$("clear-chat").onclick = () => {
+  if (!HISTORY.length) return;
+  if (!confirm("Clear this chat? The lecture stays loaded.")) return;
+  HISTORY = [];
+  saveState();
+  renderChat();
+};
+
+// -------- TTS with segment queue + pause/resume --------
+let currentAudio = null;
+let audioQueue = [];
+let queueIndex = 0;
+let ttsState = "idle"; // idle | playing | paused
+let currentBtn = null;
+let currentPauseBtn = null;
+let currentLabel = "Speak";
+function ttsLanguageCode() {
+  const answer = ($("answer-lang") && $("answer-lang").value) || "auto";
+  if (answer !== "auto") return answer;
+  const src = ($("src-lang") && $("src-lang").value) || "unknown";
+  if (src && src !== "unknown") return src;
+  return "en-IN";
+}
+function resetTtsButtons() {
+  if (currentBtn) {
+    currentBtn.textContent = currentLabel || "Speak";
+    currentBtn.disabled = false;
+  }
+  if (currentPauseBtn) currentPauseBtn.style.display = "none";
+  currentBtn = null;
+  currentPauseBtn = null;
+  currentAudio = null;
+  audioQueue = [];
+  queueIndex = 0;
+  ttsState = "idle";
+  setCartoonSpeaking(false);
+}
+function playNextInQueue() {
+  if (queueIndex >= audioQueue.length) {
+    console.log("[Vidya TTS] queue drained after", audioQueue.length, "segments");
+    resetTtsButtons();
+    return;
+  }
+  const src = audioQueue[queueIndex];
+  console.log("[Vidya TTS] playing segment", queueIndex + 1, "of", audioQueue.length, "size", src.length, "chars");
+  currentAudio = new Audio("data:audio/wav;base64," + src);
+  const advanceOnce = (reason) => {
+    if (!currentAudio) return;
+    console.log("[Vidya TTS] segment", queueIndex + 1, "done:", reason);
+    currentAudio = null;
+    queueIndex += 1;
+    playNextInQueue();
+  };
+  currentAudio.onended = () => advanceOnce("ended");
+  currentAudio.onerror = () => advanceOnce("error");
+  currentAudio.play().then(() => {
+    ttsState = "playing";
+    const label = "Stop (" + (queueIndex + 1) + "/" + audioQueue.length + ")";
+    if (currentBtn) currentBtn.textContent = label;
+    if (currentPauseBtn) { currentPauseBtn.textContent = "Pause"; currentPauseBtn.style.display = ""; }
+    setCartoonSpeaking(true);
+  }).catch((err) => {
+    console.log("[Vidya TTS] play() rejected on segment", queueIndex + 1, err);
+    advanceOnce("play_rejected");
+  });
+}
+function togglePauseResume() {
+  if (!currentAudio) return;
+  if (ttsState === "playing") {
+    currentAudio.pause();
+    ttsState = "paused";
+    if (currentPauseBtn) currentPauseBtn.textContent = "Resume";
+    if (currentBtn) currentBtn.textContent = "Paused";
+    setCartoonSpeaking(false);
+  } else if (ttsState === "paused") {
+    currentAudio.play().then(() => {
+      ttsState = "playing";
+      if (currentPauseBtn) currentPauseBtn.textContent = "Pause";
+      if (currentBtn) currentBtn.textContent = "Stop";
+      setCartoonSpeaking(true);
+    }).catch(() => {});
+  }
+}
+async function speakText(text, btn, pauseBtn) {
+  // Second click on Speak while playing = stop.
+  if (currentAudio) {
+    try { currentAudio.pause(); } catch (e) {}
+    resetTtsButtons();
+    return;
+  }
+  currentBtn = btn;
+  currentPauseBtn = pauseBtn || null;
+  currentLabel = btn.textContent || "Speak";
+  btn.disabled = true;
+  btn.textContent = "Loading voice...";
+  if (currentPauseBtn) currentPauseBtn.style.display = "none";
+  try {
+    const r = await fetch("/api/tts", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        text,
+        speaker: $("tts-voice").value,
+        target_language_code: ttsLanguageCode(),
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      btn.textContent = "TTS failed";
+      setTimeout(() => { resetTtsButtons(); }, 1500);
+      return;
+    }
+    const audios = Array.isArray(j.audios) && j.audios.length
+      ? j.audios
+      : (j.audio_base64 ? [j.audio_base64] : []);
+    if (!audios.length) {
+      btn.textContent = "No audio";
+      setTimeout(() => { resetTtsButtons(); }, 1500);
+      return;
+    }
+    audioQueue = audios;
+    queueIndex = 0;
+    btn.disabled = false;
+    playNextInQueue();
+  } catch (e) {
+    resetTtsButtons();
+  }
+}
+
+// -------- Extension postMessage bridge --------
+window.addEventListener("message", async (e) => {
+  const data = e.data;
+  if (!data || !data.__vidya) return;
+  if (data.type === "set-video-url") {
+    $("video-url").value = data.url || "";
+    if (data.autoload) loadUrl();
+  }
+  if (data.type === "set-transcript") {
+    TIMELINE = [{start: 0, type: "audio", text: data.text || ""}];
+    META = {title: data.title || "Captured audio", method: "extension-capture"};
+    HISTORY = [];
+    saveState();
+    renderLoadedSummary();
+    renderChat();
+  }
+});
+
+// -------- UI translations --------
+const UI_LANG_NAMES = {
+  "en-IN": "English",
+  "hi-IN": "हिन्दी",
+  "bn-IN": "বাংলা",
+  "gu-IN": "ગુજરાતી",
+  "kn-IN": "ಕನ್ನಡ",
+  "ml-IN": "മലയാളം",
+  "mr-IN": "मराठी",
+  "od-IN": "ଓଡ଼ିଆ",
+  "pa-IN": "ਪੰਜਾਬੀ",
+  "ta-IN": "தமிழ்",
+  "te-IN": "తెలుగు",
+};
+const UI_STRINGS = {
+  "en-IN": {
+    tagline: "Lecture-grounded tutor",
+    heroTitle: "Ask any lecture", heroAccent: "anything",
+    heroSubtitle: "Load a lecture, then ask questions in your own language. Every answer stays grounded to the lecture with quoted evidence.",
+    sourceHeading: "Lecture Source",
+    sourceHint: "URL, file, or pasted text",
+    videoUrlLabel: "Public video URL (YouTube, Vimeo, direct .mp4, and more)",
+    videoUrlPh: "Paste a video URL",
+    loadBtn: "Load",
+    orUploadFile: "or upload a lecture file",
+    fileLabel: "Audio or video file",
+    loadFileBtn: "Load",
+    orPasteText: "or paste text",
+    pasteLabel: "Paste a transcript",
+    pastePh: "Paste the lecture transcript here...",
+    useThisText: "Use this text",
+    qLangLabel: "Question language",
+    aLangLabel: "Answer language",
+    voiceLabel: "Answer voice",
+    sameAsQuestion: "Same as question",
+    autoDetect: "Auto-detect",
+    attachPrereads: "attach pre-reads (optional)",
+    prereadLabel: "Reading materials linked to this lecture (papers, articles, PDFs)",
+    prereadUrlPh: "Paste a URL to an article or PDF",
+    addUrl: "Add URL",
+    addFile: "Add File",
+    askHeading: "Ask Vidya",
+    clearChat: "Clear chat",
+    yourQuestion: "Your question",
+    questionPh: "Type here, or use the microphone to speak.",
+    recordBtn: "Record",
+    askBtn: "Ask Vidya",
+    clearInput: "Clear input",
+    speakBtn: "Speak",
+    stopBtn: "Stop",
+    copyTranscript: "Copy transcript",
+    dropLecture: "Drop this lecture",
+    manageKeys: "Manage keys",
+    keysBanner: "All API keys loaded from",
+    searchPh: "Search inside the transcript...",
+    fullTranscript: "Show full transcript",
+    includeVisualsLabel: "Include visuals",
+    includeVisualsDesc: "Sample frames from the video, describe diagrams, charts, and slide text with Gemini. Requires a Gemini key. Adds time.",
+    quizBtn: "Take a quiz",
+    quizGenerating: "Vidya is writing your quiz...",
+    loadFirst: "Load a lecture first.",
+  },
+  "hi-IN": {
+    tagline: "व्याख्यान पर आधारित शिक्षक",
+    heroTitle: "किसी भी व्याख्यान से पूछें", heroAccent: "कुछ भी",
+    heroSubtitle: "एक व्याख्यान लोड करें, फिर अपनी भाषा में प्रश्न पूछें। हर उत्तर व्याख्यान पर आधारित होगा।",
+    sourceHeading: "व्याख्यान का स्रोत",
+    sourceHint: "URL, फ़ाइल, या पेस्ट किया गया पाठ",
+    videoUrlLabel: "सार्वजनिक वीडियो URL (YouTube, Vimeo, आदि)",
+    videoUrlPh: "वीडियो URL पेस्ट करें",
+    loadBtn: "लोड करें",
+    orUploadFile: "या व्याख्यान फ़ाइल अपलोड करें",
+    fileLabel: "ऑडियो या वीडियो फ़ाइल",
+    loadFileBtn: "लोड करें",
+    orPasteText: "या पाठ पेस्ट करें",
+    pasteLabel: "प्रतिलिपि पेस्ट करें",
+    pastePh: "यहाँ व्याख्यान का प्रतिलेख पेस्ट करें...",
+    useThisText: "इस पाठ का उपयोग करें",
+    qLangLabel: "प्रश्न की भाषा",
+    aLangLabel: "उत्तर की भाषा",
+    voiceLabel: "उत्तर की आवाज़",
+    sameAsQuestion: "प्रश्न जैसी",
+    autoDetect: "स्वचालित पहचान",
+    attachPrereads: "पूर्व-पठन जोड़ें (वैकल्पिक)",
+    prereadLabel: "इस व्याख्यान से जुड़ी सामग्री (पेपर, लेख, PDF)",
+    prereadUrlPh: "किसी लेख या PDF का URL पेस्ट करें",
+    addUrl: "URL जोड़ें",
+    addFile: "फ़ाइल जोड़ें",
+    askHeading: "विद्या से पूछें",
+    clearChat: "चैट साफ़ करें",
+    yourQuestion: "आपका प्रश्न",
+    questionPh: "यहाँ लिखें, या माइक्रोफ़ोन से बोलें।",
+    recordBtn: "रिकॉर्ड",
+    askBtn: "विद्या से पूछें",
+    clearInput: "इनपुट साफ़ करें",
+    speakBtn: "बोलें",
+    stopBtn: "रोकें",
+    copyTranscript: "प्रतिलिपि कॉपी करें",
+    dropLecture: "यह व्याख्यान हटाएँ",
+    manageKeys: "कुंजियाँ प्रबंधित करें",
+    keysBanner: "सभी API कुंजियाँ लोड हो गईं",
+    searchPh: "प्रतिलिपि में खोजें...",
+    fullTranscript: "पूरी प्रतिलिपि दिखाएँ",
+    includeVisualsLabel: "दृश्य शामिल करें",
+    includeVisualsDesc: "वीडियो के फ्रेम से आरेख, चार्ट और स्लाइड टेक्स्ट का वर्णन Gemini द्वारा। Gemini कुंजी आवश्यक।",
+    quizBtn: "एक प्रश्नोत्तरी लें",
+    quizGenerating: "विद्या आपकी प्रश्नोत्तरी लिख रही है...",
+    avatarMode: "शिक्षक अवतार दिखाएँ",
+    loadFirst: "पहले एक व्याख्यान लोड करें।",
+  },
+  "mr-IN": {
+    tagline: "व्याख्यान-आधारित शिक्षक",
+    heroTitle: "कोणत्याही व्याख्यानाला विचारा", heroAccent: "काहीही",
+    heroSubtitle: "व्याख्यान लोड करा, नंतर आपल्या भाषेत प्रश्न विचारा. प्रत्येक उत्तर व्याख्यानावर आधारित असते.",
+    sourceHeading: "व्याख्यानाचा स्रोत",
+    sourceHint: "URL, फाइल, किंवा पेस्ट केलेला मजकूर",
+    videoUrlLabel: "सार्वजनिक व्हिडिओ URL",
+    videoUrlPh: "व्हिडिओ URL पेस्ट करा",
+    loadBtn: "लोड करा",
+    orUploadFile: "किंवा व्याख्यान फाइल अपलोड करा",
+    fileLabel: "ऑडिओ किंवा व्हिडिओ फाइल",
+    loadFileBtn: "लोड करा",
+    orPasteText: "किंवा मजकूर पेस्ट करा",
+    pasteLabel: "प्रतिलेख पेस्ट करा",
+    pastePh: "येथे व्याख्यानाचा प्रतिलेख पेस्ट करा...",
+    useThisText: "हा मजकूर वापरा",
+    qLangLabel: "प्रश्नाची भाषा",
+    aLangLabel: "उत्तराची भाषा",
+    voiceLabel: "उत्तराचा आवाज",
+    sameAsQuestion: "प्रश्नाप्रमाणे",
+    autoDetect: "स्वयंचलित ओळख",
+    attachPrereads: "पूर्ववाचन जोडा (ऐच्छिक)",
+    prereadLabel: "या व्याख्यानाशी संबंधित साहित्य",
+    prereadUrlPh: "लेख किंवा PDF चा URL",
+    addUrl: "URL जोडा",
+    addFile: "फाइल जोडा",
+    askHeading: "विद्येला विचारा",
+    clearChat: "चॅट साफ करा",
+    yourQuestion: "आपला प्रश्न",
+    questionPh: "येथे टाइप करा, किंवा माईकने बोला.",
+    recordBtn: "रेकॉर्ड",
+    askBtn: "विद्येला विचारा",
+    clearInput: "इनपुट साफ करा",
+    speakBtn: "बोला",
+    stopBtn: "थांबवा",
+    copyTranscript: "प्रतिलेख कॉपी करा",
+    dropLecture: "हे व्याख्यान काढा",
+    manageKeys: "कीज व्यवस्थापित करा",
+    keysBanner: "सर्व API कीज लोड झाल्या",
+    searchPh: "प्रतिलेखात शोधा...",
+    fullTranscript: "संपूर्ण प्रतिलेख दाखवा",
+    includeVisualsLabel: "दृश्ये समाविष्ट करा",
+    includeVisualsDesc: "व्हिडिओ फ्रेम्स Gemini द्वारे वर्णन. Gemini की आवश्यक.",
+    quizBtn: "प्रश्नमंजुषा घ्या",
+    quizGenerating: "विद्या आपली प्रश्नमंजुषा तयार करत आहे...",
+    avatarMode: "शिक्षक अवतार दिखाएँ",
+    loadFirst: "प्रथम एक व्याख्यान लोड करा.",
+  },
+  "bn-IN": {
+    tagline: "লেকচার-ভিত্তিক শিক্ষক",
+    heroTitle: "যেকোনো লেকচারকে জিজ্ঞাসা করুন", heroAccent: "যেকোনো কিছু",
+    heroSubtitle: "একটি লেকচার লোড করুন, তারপর আপনার ভাষায় প্রশ্ন করুন। প্রতিটি উত্তর লেকচারে ভিত্তি করে।",
+    sourceHeading: "লেকচারের উৎস", sourceHint: "URL, ফাইল, বা পেস্ট করা টেক্সট",
+    videoUrlLabel: "পাবলিক ভিডিও URL", videoUrlPh: "ভিডিও URL পেস্ট করুন", loadBtn: "লোড",
+    orUploadFile: "অথবা একটি লেকচার ফাইল আপলোড করুন", fileLabel: "অডিও বা ভিডিও ফাইল", loadFileBtn: "লোড",
+    orPasteText: "অথবা টেক্সট পেস্ট করুন", pasteLabel: "একটি প্রতিলিপি পেস্ট করুন",
+    pastePh: "এখানে প্রতিলিপি পেস্ট করুন...", useThisText: "এই টেক্সট ব্যবহার করুন",
+    qLangLabel: "প্রশ্নের ভাষা", aLangLabel: "উত্তরের ভাষা", voiceLabel: "উত্তরের কণ্ঠ",
+    sameAsQuestion: "প্রশ্নের মতো", autoDetect: "স্বয়ংক্রিয় সনাক্তকরণ",
+    attachPrereads: "পূর্ব-পাঠ সংযুক্ত করুন (ঐচ্ছিক)",
+    prereadLabel: "এই লেকচারের সাথে সংযুক্ত পাঠ্য",
+    prereadUrlPh: "নিবন্ধ বা PDF-এর URL",
+    addUrl: "URL যোগ করুন", addFile: "ফাইল যোগ করুন",
+    askHeading: "বিদ্যাকে জিজ্ঞাসা করুন", clearChat: "চ্যাট সাফ করুন",
+    yourQuestion: "আপনার প্রশ্ন", questionPh: "এখানে টাইপ করুন, বা মাইক্রোফোন দিয়ে বলুন।",
+    recordBtn: "রেকর্ড", askBtn: "বিদ্যাকে জিজ্ঞাসা করুন", clearInput: "সাফ করুন",
+    speakBtn: "বলুন", stopBtn: "থামান", copyTranscript: "প্রতিলিপি কপি করুন",
+    dropLecture: "এই লেকচার সরান", manageKeys: "কী পরিচালনা", keysBanner: "সব API কী লোড হয়েছে",
+    searchPh: "প্রতিলিপিতে খুঁজুন...", fullTranscript: "সম্পূর্ণ প্রতিলিপি দেখান",
+    includeVisualsLabel: "দৃশ্য অন্তর্ভুক্ত করুন",
+    includeVisualsDesc: "Gemini দ্বারা ভিডিও ফ্রেম বর্ণনা। Gemini কী প্রয়োজন।",
+  },
+  "gu-IN": {
+    tagline: "વ્યાખ્યાન-આધારિત શિક્ષક",
+    heroTitle: "કોઈપણ વ્યાખ્યાનને પૂછો", heroAccent: "કંઈપણ",
+    heroSubtitle: "એક વ્યાખ્યાન લોડ કરો, પછી તમારી ભાષામાં પ્રશ્નો પૂછો.",
+    sourceHeading: "વ્યાખ્યાનનો સ્રોત", sourceHint: "URL, ફાઇલ, અથવા પેસ્ટ કરેલ ટેક્સ્ટ",
+    videoUrlLabel: "સાર્વજનિક વિડિઓ URL", videoUrlPh: "વિડિઓ URL પેસ્ટ કરો", loadBtn: "લોડ કરો",
+    orUploadFile: "અથવા વ્યાખ્યાન ફાઇલ અપલોડ કરો", fileLabel: "ઓડિઓ કે વિડિઓ ફાઇલ", loadFileBtn: "લોડ કરો",
+    orPasteText: "અથવા ટેક્સ્ટ પેસ્ટ કરો", pasteLabel: "એક પ્રતિલિપિ પેસ્ટ કરો",
+    pastePh: "અહીં પ્રતિલિપિ પેસ્ટ કરો...", useThisText: "આ ટેક્સ્ટ વાપરો",
+    qLangLabel: "પ્રશ્નની ભાષા", aLangLabel: "જવાબની ભાષા", voiceLabel: "જવાબનો અવાજ",
+    sameAsQuestion: "પ્રશ્ન જેવી", autoDetect: "સ્વયંસંચાલિત",
+    attachPrereads: "પૂર્વ-વાંચન જોડો (વૈકલ્પિક)",
+    prereadLabel: "આ વ્યાખ્યાન સાથે જોડાયેલ સામગ્રી",
+    prereadUrlPh: "લેખ કે PDF નું URL",
+    addUrl: "URL ઉમેરો", addFile: "ફાઇલ ઉમેરો",
+    askHeading: "વિદ્યાને પૂછો", clearChat: "ચેટ સાફ કરો",
+    yourQuestion: "તમારો પ્રશ્ન", questionPh: "અહીં ટાઇપ કરો, અથવા માઇક દ્વારા બોલો.",
+    recordBtn: "રેકોર્ડ", askBtn: "વિદ્યાને પૂછો", clearInput: "સાફ કરો",
+    speakBtn: "બોલો", stopBtn: "રોકો", copyTranscript: "પ્રતિલિપિ કૉપિ કરો",
+    dropLecture: "આ વ્યાખ્યાન દૂર કરો", manageKeys: "કીઓ પ્રબંધ", keysBanner: "તમામ API કીઓ લોડ થઈ",
+    searchPh: "પ્રતિલિપિમાં શોધો...", fullTranscript: "સંપૂર્ણ પ્રતિલિપિ બતાવો",
+    includeVisualsLabel: "દ્રશ્યો સામેલ કરો",
+    includeVisualsDesc: "Gemini દ્વારા વિડિઓ ફ્રેમનું વર્ણન. Gemini કી જરૂરી.",
+  },
+  "kn-IN": {
+    tagline: "ಉಪನ್ಯಾಸ ಆಧಾರಿತ ಶಿಕ್ಷಕ",
+    heroTitle: "ಯಾವುದೇ ಉಪನ್ಯಾಸವನ್ನು ಕೇಳಿ", heroAccent: "ಏನನ್ನಾದರೂ",
+    heroSubtitle: "ಒಂದು ಉಪನ್ಯಾಸವನ್ನು ಲೋಡ್ ಮಾಡಿ, ನಂತರ ನಿಮ್ಮ ಭಾಷೆಯಲ್ಲಿ ಪ್ರಶ್ನೆಗಳನ್ನು ಕೇಳಿ.",
+    sourceHeading: "ಉಪನ್ಯಾಸ ಮೂಲ", sourceHint: "URL, ಫೈಲ್, ಅಥವಾ ಪೇಸ್ಟ್ ಮಾಡಿದ ಪಠ್ಯ",
+    videoUrlLabel: "ಸಾರ್ವಜನಿಕ ವೀಡಿಯೊ URL", videoUrlPh: "ವೀಡಿಯೊ URL ಅಂಟಿಸಿ", loadBtn: "ಲೋಡ್",
+    orUploadFile: "ಅಥವಾ ಫೈಲ್ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ", fileLabel: "ಆಡಿಯೊ ಅಥವಾ ವೀಡಿಯೊ ಫೈಲ್", loadFileBtn: "ಲೋಡ್",
+    orPasteText: "ಅಥವಾ ಪಠ್ಯ ಅಂಟಿಸಿ", pasteLabel: "ಪ್ರತಿಲಿಪಿ ಅಂಟಿಸಿ",
+    pastePh: "ಪ್ರತಿಲಿಪಿಯನ್ನು ಇಲ್ಲಿ ಅಂಟಿಸಿ...", useThisText: "ಈ ಪಠ್ಯ ಬಳಸಿ",
+    qLangLabel: "ಪ್ರಶ್ನೆಯ ಭಾಷೆ", aLangLabel: "ಉತ್ತರದ ಭಾಷೆ", voiceLabel: "ಉತ್ತರದ ಧ್ವನಿ",
+    sameAsQuestion: "ಪ್ರಶ್ನೆಯಂತೆ", autoDetect: "ಸ್ವಯಂಚಾಲಿತ",
+    attachPrereads: "ಪೂರ್ವ-ಓದುಗಳನ್ನು ಸೇರಿಸಿ",
+    prereadLabel: "ಈ ಉಪನ್ಯಾಸಕ್ಕೆ ಸಂಬಂಧಿಸಿದ ಸಾಮಗ್ರಿ",
+    prereadUrlPh: "ಲೇಖನ ಅಥವಾ PDF URL",
+    addUrl: "URL ಸೇರಿಸಿ", addFile: "ಫೈಲ್ ಸೇರಿಸಿ",
+    askHeading: "ವಿದ್ಯಾಳನ್ನು ಕೇಳಿ", clearChat: "ಚಾಟ್ ತೆರವು",
+    yourQuestion: "ನಿಮ್ಮ ಪ್ರಶ್ನೆ", questionPh: "ಇಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ, ಅಥವಾ ಮೈಕ್ ಬಳಸಿ ಮಾತನಾಡಿ.",
+    recordBtn: "ರೆಕಾರ್ಡ್", askBtn: "ವಿದ್ಯಾಳನ್ನು ಕೇಳಿ", clearInput: "ತೆರವು",
+    speakBtn: "ಮಾತನಾಡಿ", stopBtn: "ನಿಲ್ಲಿಸಿ", copyTranscript: "ಪ್ರತಿಲಿಪಿ ನಕಲಿಸಿ",
+    dropLecture: "ಉಪನ್ಯಾಸ ತೆಗೆಯಿರಿ", manageKeys: "ಕೀಗಳು", keysBanner: "ಎಲ್ಲಾ API ಕೀಗಳು ಲೋಡ್ ಆಗಿವೆ",
+    searchPh: "ಪ್ರತಿಲಿಪಿಯಲ್ಲಿ ಹುಡುಕಿ...", fullTranscript: "ಪೂರ್ಣ ಪ್ರತಿಲಿಪಿ ತೋರಿಸಿ",
+    includeVisualsLabel: "ದೃಶ್ಯಗಳನ್ನು ಸೇರಿಸಿ",
+    includeVisualsDesc: "Gemini ವೀಡಿಯೊ ಫ್ರೇಮ್‌ಗಳನ್ನು ವಿವರಿಸುತ್ತದೆ. Gemini ಕೀ ಅಗತ್ಯ.",
+  },
+  "ml-IN": {
+    tagline: "പ്രഭാഷണ-അധിഷ്ഠിത ട്യൂട്ടർ",
+    heroTitle: "ഏത് പ്രഭാഷണത്തോടും ചോദിക്കൂ", heroAccent: "എന്തും",
+    heroSubtitle: "ഒരു പ്രഭാഷണം ലോഡ് ചെയ്യുക, തുടർന്ന് നിങ്ങളുടെ ഭാഷയിൽ ചോദ്യങ്ങൾ ചോദിക്കുക.",
+    sourceHeading: "പ്രഭാഷണ ഉറവിടം", sourceHint: "URL, ഫയൽ, അല്ലെങ്കിൽ പേസ്റ്റ് ചെയ്ത ടെക്സ്റ്റ്",
+    videoUrlLabel: "പൊതു വീഡിയോ URL", videoUrlPh: "വീഡിയോ URL പേസ്റ്റ് ചെയ്യുക", loadBtn: "ലോഡ്",
+    orUploadFile: "അല്ലെങ്കിൽ ഫയൽ അപ്‌ലോഡ് ചെയ്യുക", fileLabel: "ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ ഫയൽ", loadFileBtn: "ലോഡ്",
+    orPasteText: "അല്ലെങ്കിൽ ടെക്സ്റ്റ് പേസ്റ്റ് ചെയ്യുക", pasteLabel: "ട്രാൻസ്ക്രിപ്റ്റ് പേസ്റ്റ് ചെയ്യുക",
+    pastePh: "ഇവിടെ ട്രാൻസ്ക്രിപ്റ്റ് പേസ്റ്റ് ചെയ്യുക...", useThisText: "ഈ ടെക്സ്റ്റ് ഉപയോഗിക്കുക",
+    qLangLabel: "ചോദ്യത്തിന്റെ ഭാഷ", aLangLabel: "ഉത്തരത്തിന്റെ ഭാഷ", voiceLabel: "ഉത്തരത്തിന്റെ ശബ്ദം",
+    sameAsQuestion: "ചോദ്യം പോലെ", autoDetect: "സ്വയം കണ്ടെത്തുക",
+    attachPrereads: "മുൻവായന ചേർക്കുക",
+    prereadLabel: "ഈ പ്രഭാഷണവുമായി ബന്ധപ്പെട്ട വായന",
+    prereadUrlPh: "ലേഖനം അല്ലെങ്കിൽ PDF URL",
+    addUrl: "URL ചേർക്കുക", addFile: "ഫയൽ ചേർക്കുക",
+    askHeading: "വിദ്യയോട് ചോദിക്കുക", clearChat: "ചാറ്റ് മായ്ക്കുക",
+    yourQuestion: "നിങ്ങളുടെ ചോദ്യം", questionPh: "ഇവിടെ ടൈപ്പ് ചെയ്യുക, അല്ലെങ്കിൽ മൈക്ക് ഉപയോഗിക്കുക.",
+    recordBtn: "റെക്കോർഡ്", askBtn: "വിദ്യയോട് ചോദിക്കുക", clearInput: "മായ്ക്കുക",
+    speakBtn: "സംസാരിക്കുക", stopBtn: "നിർത്തുക", copyTranscript: "ട്രാൻസ്ക്രിപ്റ്റ് പകർത്തുക",
+    dropLecture: "പ്രഭാഷണം നീക്കുക", manageKeys: "കീകൾ", keysBanner: "എല്ലാ API കീകളും ലോഡായി",
+    searchPh: "ട്രാൻസ്ക്രിപ്റ്റിൽ തിരയുക...", fullTranscript: "മുഴുവൻ ട്രാൻസ്ക്രിപ്റ്റ് കാണിക്കുക",
+    includeVisualsLabel: "ദൃശ്യങ്ങൾ ഉൾപ്പെടുത്തുക",
+    includeVisualsDesc: "Gemini വീഡിയോ ഫ്രെയിമുകൾ വിവരിക്കുന്നു. Gemini കീ ആവശ്യം.",
+  },
+  "od-IN": {
+    tagline: "ବକ୍ତୃତା-ଆଧାରିତ ଶିକ୍ଷକ",
+    heroTitle: "ଯେକୌଣସି ବକ୍ତୃତାକୁ ପଚାରନ୍ତୁ", heroAccent: "ଯାହା ମଧ୍ୟ",
+    heroSubtitle: "ଏକ ବକ୍ତୃତା ଲୋଡ୍ କରନ୍ତୁ, ତା'ପରେ ଆପଣଙ୍କ ଭାଷାରେ ପ୍ରଶ୍ନ ପଚାରନ୍ତୁ।",
+    sourceHeading: "ବକ୍ତୃତା ଉତ୍ସ", sourceHint: "URL, ଫାଇଲ୍, କିମ୍ବା ପେଷ୍ଟ୍ କରାଯାଇଥିବା ପାଠ୍ୟ",
+    videoUrlLabel: "ସାର୍ବଜନୀନ ଭିଡିଓ URL", videoUrlPh: "ଭିଡିଓ URL ପେଷ୍ଟ୍ କରନ୍ତୁ", loadBtn: "ଲୋଡ୍",
+    orUploadFile: "କିମ୍ବା ଫାଇଲ୍ ଅପଲୋଡ୍ କରନ୍ତୁ", fileLabel: "ଅଡିଓ କିମ୍ବା ଭିଡିଓ ଫାଇଲ୍", loadFileBtn: "ଲୋଡ୍",
+    orPasteText: "କିମ୍ବା ପାଠ୍ୟ ପେଷ୍ଟ୍ କରନ୍ତୁ", pasteLabel: "ଏକ ଟ୍ରାନ୍ସକ୍ରିପ୍ଟ ପେଷ୍ଟ୍ କରନ୍ତୁ",
+    pastePh: "ଏଠାରେ ଟ୍ରାନ୍ସକ୍ରିପ୍ଟ ପେଷ୍ଟ୍ କରନ୍ତୁ...", useThisText: "ଏହି ପାଠ୍ୟ ବ୍ୟବହାର କରନ୍ତୁ",
+    qLangLabel: "ପ୍ରଶ୍ନ ଭାଷା", aLangLabel: "ଉତ୍ତର ଭାଷା", voiceLabel: "ଉତ୍ତର ସ୍ୱର",
+    sameAsQuestion: "ପ୍ରଶ୍ନ ପରି", autoDetect: "ସ୍ୱୟଂ ଚିହ୍ନଟ",
+    attachPrereads: "ପୂର୍ବ-ପଠନ ଯୋଡନ୍ତୁ",
+    prereadLabel: "ଏହି ବକ୍ତୃତା ସହ ଜଡିତ ପଠନ",
+    prereadUrlPh: "ପ୍ରବନ୍ଧ କିମ୍ବା PDF URL",
+    addUrl: "URL ଯୋଡନ୍ତୁ", addFile: "ଫାଇଲ୍ ଯୋଡନ୍ତୁ",
+    askHeading: "ବିଦ୍ୟାଙ୍କୁ ପଚାରନ୍ତୁ", clearChat: "ଚାଟ୍ ସଫା",
+    yourQuestion: "ଆପଣଙ୍କ ପ୍ରଶ୍ନ", questionPh: "ଏଠାରେ ଟାଇପ୍ କରନ୍ତୁ, କିମ୍ବା ମାଇକ୍ ବ୍ୟବହାର କରନ୍ତୁ।",
+    recordBtn: "ରେକର୍ଡ୍", askBtn: "ବିଦ୍ୟାଙ୍କୁ ପଚାରନ୍ତୁ", clearInput: "ସଫା",
+    speakBtn: "କୁହନ୍ତୁ", stopBtn: "ବନ୍ଦ", copyTranscript: "ଟ୍ରାନ୍ସକ୍ରିପ୍ଟ କପି",
+    dropLecture: "ବକ୍ତୃତା ଅପସାରଣ", manageKeys: "କୀ ପରିଚାଳନା", keysBanner: "ସମସ୍ତ API କୀ ଲୋଡ୍ ହୋଇଛି",
+    searchPh: "ଟ୍ରାନ୍ସକ୍ରିପ୍ଟରେ ଖୋଜନ୍ତୁ...", fullTranscript: "ସମ୍ପୂର୍ଣ୍ଣ ଟ୍ରାନ୍ସକ୍ରିପ୍ଟ ଦେଖାନ୍ତୁ",
+    includeVisualsLabel: "ଦୃଶ୍ୟ ଅନ୍ତର୍ଭୁକ୍ତ",
+    includeVisualsDesc: "Gemini ଭିଡିଓ ଫ୍ରେମ୍ ବର୍ଣ୍ଣନା କରେ। Gemini କୀ ଆବଶ୍ୟକ।",
+  },
+  "pa-IN": {
+    tagline: "ਭਾਸ਼ਣ-ਆਧਾਰਿਤ ਸਿੱਖਿਅਕ",
+    heroTitle: "ਕਿਸੇ ਵੀ ਭਾਸ਼ਣ ਨੂੰ ਪੁੱਛੋ", heroAccent: "ਕੁਝ ਵੀ",
+    heroSubtitle: "ਇੱਕ ਭਾਸ਼ਣ ਲੋਡ ਕਰੋ, ਫਿਰ ਆਪਣੀ ਭਾਸ਼ਾ ਵਿੱਚ ਸਵਾਲ ਪੁੱਛੋ।",
+    sourceHeading: "ਭਾਸ਼ਣ ਦਾ ਸਰੋਤ", sourceHint: "URL, ਫਾਈਲ, ਜਾਂ ਪੇਸਟ ਕੀਤਾ ਟੈਕਸਟ",
+    videoUrlLabel: "ਜਨਤਕ ਵੀਡੀਓ URL", videoUrlPh: "ਵੀਡੀਓ URL ਪੇਸਟ ਕਰੋ", loadBtn: "ਲੋਡ ਕਰੋ",
+    orUploadFile: "ਜਾਂ ਭਾਸ਼ਣ ਫਾਈਲ ਅੱਪਲੋਡ ਕਰੋ", fileLabel: "ਆਡੀਓ ਜਾਂ ਵੀਡੀਓ ਫਾਈਲ", loadFileBtn: "ਲੋਡ ਕਰੋ",
+    orPasteText: "ਜਾਂ ਟੈਕਸਟ ਪੇਸਟ ਕਰੋ", pasteLabel: "ਪ੍ਰਤੀਲਿਪੀ ਪੇਸਟ ਕਰੋ",
+    pastePh: "ਇੱਥੇ ਪ੍ਰਤੀਲਿਪੀ ਪੇਸਟ ਕਰੋ...", useThisText: "ਇਹ ਟੈਕਸਟ ਵਰਤੋ",
+    qLangLabel: "ਸਵਾਲ ਦੀ ਭਾਸ਼ਾ", aLangLabel: "ਜਵਾਬ ਦੀ ਭਾਸ਼ਾ", voiceLabel: "ਜਵਾਬ ਦੀ ਆਵਾਜ਼",
+    sameAsQuestion: "ਸਵਾਲ ਵਾਂਗ", autoDetect: "ਆਟੋ",
+    attachPrereads: "ਪੂਰਵ-ਪਾਠ ਜੋੜੋ",
+    prereadLabel: "ਇਸ ਭਾਸ਼ਣ ਨਾਲ ਸਬੰਧਿਤ ਸਮੱਗਰੀ",
+    prereadUrlPh: "ਲੇਖ ਜਾਂ PDF URL",
+    addUrl: "URL ਜੋੜੋ", addFile: "ਫਾਈਲ ਜੋੜੋ",
+    askHeading: "ਵਿਦਿਆ ਨੂੰ ਪੁੱਛੋ", clearChat: "ਚੈਟ ਸਾਫ਼",
+    yourQuestion: "ਤੁਹਾਡਾ ਸਵਾਲ", questionPh: "ਇੱਥੇ ਟਾਈਪ ਕਰੋ, ਜਾਂ ਮਾਈਕ ਵਰਤੋ।",
+    recordBtn: "ਰਿਕਾਰਡ", askBtn: "ਵਿਦਿਆ ਨੂੰ ਪੁੱਛੋ", clearInput: "ਸਾਫ਼",
+    speakBtn: "ਬੋਲੋ", stopBtn: "ਰੋਕੋ", copyTranscript: "ਪ੍ਰਤੀਲਿਪੀ ਕਾਪੀ",
+    dropLecture: "ਭਾਸ਼ਣ ਹਟਾਓ", manageKeys: "ਕੁੰਜੀਆਂ", keysBanner: "ਸਾਰੀਆਂ API ਕੁੰਜੀਆਂ ਲੋਡ ਹੋਈਆਂ",
+    searchPh: "ਪ੍ਰਤੀਲਿਪੀ ਵਿੱਚ ਖੋਜੋ...", fullTranscript: "ਪੂਰੀ ਪ੍ਰਤੀਲਿਪੀ ਦਿਖਾਓ",
+    includeVisualsLabel: "ਦ੍ਰਿਸ਼ ਸ਼ਾਮਲ ਕਰੋ",
+    includeVisualsDesc: "Gemini ਵੀਡੀਓ ਫ੍ਰੇਮਾਂ ਦਾ ਵਰਣਨ। Gemini ਕੁੰਜੀ ਦੀ ਲੋੜ।",
+  },
+  "ta-IN": {
+    tagline: "விரிவுரை சார்ந்த ஆசிரியர்",
+    heroTitle: "எந்த விரிவுரையிடமும் கேளுங்கள்", heroAccent: "எதையும்",
+    heroSubtitle: "ஒரு விரிவுரையை ஏற்றவும், பின்னர் உங்கள் மொழியில் கேள்விகள் கேளுங்கள்.",
+    sourceHeading: "விரிவுரை மூலம்", sourceHint: "URL, கோப்பு, அல்லது ஒட்டப்பட்ட உரை",
+    videoUrlLabel: "பொது வீடியோ URL", videoUrlPh: "வீடியோ URL ஒட்டவும்", loadBtn: "ஏற்று",
+    orUploadFile: "அல்லது விரிவுரை கோப்பை பதிவேற்றவும்", fileLabel: "ஆடியோ அல்லது வீடியோ கோப்பு", loadFileBtn: "ஏற்று",
+    orPasteText: "அல்லது உரையை ஒட்டவும்", pasteLabel: "ஒரு பிரதியை ஒட்டவும்",
+    pastePh: "இங்கே பிரதியை ஒட்டவும்...", useThisText: "இந்த உரையைப் பயன்படுத்து",
+    qLangLabel: "கேள்வி மொழி", aLangLabel: "பதில் மொழி", voiceLabel: "பதில் குரல்",
+    sameAsQuestion: "கேள்வி போல", autoDetect: "தானியங்கு",
+    attachPrereads: "முன்-வாசிப்பு சேர்",
+    prereadLabel: "இந்த விரிவுரையுடன் இணைந்த வாசிப்பு",
+    prereadUrlPh: "கட்டுரை அல்லது PDF URL",
+    addUrl: "URL சேர்", addFile: "கோப்பு சேர்",
+    askHeading: "வித்யாவிடம் கேள்", clearChat: "அரட்டை அழி",
+    yourQuestion: "உங்கள் கேள்வி", questionPh: "இங்கே தட்டச்சு, அல்லது மைக்கை பயன்படுத்தவும்.",
+    recordBtn: "பதிவு", askBtn: "வித்யாவிடம் கேள்", clearInput: "அழி",
+    speakBtn: "பேசு", stopBtn: "நிறுத்து", copyTranscript: "பிரதியை நகலெடு",
+    dropLecture: "விரிவுரையை நீக்கு", manageKeys: "விசைகள்", keysBanner: "அனைத்து API விசைகளும் ஏற்றப்பட்டன",
+    searchPh: "பிரதியில் தேடு...", fullTranscript: "முழு பிரதியைக் காட்டு",
+    includeVisualsLabel: "காட்சிகளைச் சேர்",
+    includeVisualsDesc: "Gemini வீடியோ சட்டகங்களை விவரிக்கிறது. Gemini விசை தேவை.",
+  },
+  "te-IN": {
+    tagline: "ఉపన్యాస ఆధారిత ట్యూటర్",
+    heroTitle: "ఏ ఉపన్యాసాన్నైనా అడగండి", heroAccent: "ఏదైనా",
+    heroSubtitle: "ఒక ఉపన్యాసాన్ని లోడ్ చేయండి, తర్వాత మీ భాషలో ప్రశ్నలు అడగండి.",
+    sourceHeading: "ఉపన్యాస మూలం", sourceHint: "URL, ఫైల్, లేదా అతికించిన టెక్స్ట్",
+    videoUrlLabel: "పబ్లిక్ వీడియో URL", videoUrlPh: "వీడియో URL అతికించండి", loadBtn: "లోడ్",
+    orUploadFile: "లేదా ఉపన్యాస ఫైల్ అప్‌లోడ్", fileLabel: "ఆడియో లేదా వీడియో ఫైల్", loadFileBtn: "లోడ్",
+    orPasteText: "లేదా టెక్స్ట్ అతికించండి", pasteLabel: "ప్రతిలిపిని అతికించండి",
+    pastePh: "ఇక్కడ ప్రతిలిపి అతికించండి...", useThisText: "ఈ టెక్స్ట్ ఉపయోగించండి",
+    qLangLabel: "ప్రశ్న భాష", aLangLabel: "సమాధాన భాష", voiceLabel: "సమాధాన స్వరం",
+    sameAsQuestion: "ప్రశ్న వలె", autoDetect: "ఆటో",
+    attachPrereads: "ముందు-పఠనం జోడించండి",
+    prereadLabel: "ఈ ఉపన్యాసానికి సంబంధించిన పఠనం",
+    prereadUrlPh: "వ్యాసం లేదా PDF URL",
+    addUrl: "URL జోడించండి", addFile: "ఫైల్ జోడించండి",
+    askHeading: "విద్యను అడగండి", clearChat: "చాట్ శుభ్రం",
+    yourQuestion: "మీ ప్రశ్న", questionPh: "ఇక్కడ టైప్ చేయండి, లేదా మైక్ ఉపయోగించండి.",
+    recordBtn: "రికార్డ్", askBtn: "విద్యను అడగండి", clearInput: "శుభ్రం",
+    speakBtn: "మాట్లాడు", stopBtn: "ఆపు", copyTranscript: "ప్రతిలిపి కాపీ",
+    dropLecture: "ఉపన్యాసం తీసివేయండి", manageKeys: "కీలు", keysBanner: "అన్ని API కీలు లోడ్ అయ్యాయి",
+    searchPh: "ప్రతిలిపిలో వెతకండి...", fullTranscript: "పూర్తి ప్రతిలిపి చూపించండి",
+    includeVisualsLabel: "దృశ్యాలను చేర్చండి",
+    includeVisualsDesc: "Gemini వీడియో ఫ్రేమ్‌లను వివరిస్తుంది. Gemini కీ అవసరం.",
+  },
+};
+let CURRENT_UI_LANG = localStorage.getItem("vidya:ui_lang") || "en-IN";
+if (!UI_STRINGS[CURRENT_UI_LANG]) CURRENT_UI_LANG = "en-IN";
+function t(key) {
+  return (UI_STRINGS[CURRENT_UI_LANG] && UI_STRINGS[CURRENT_UI_LANG][key])
+    || (UI_STRINGS["en-IN"] && UI_STRINGS["en-IN"][key])
+    || key;
+}
+function applyTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (key) el.textContent = t(key);
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
+    const key = el.getAttribute("data-i18n-ph");
+    if (key) el.setAttribute("placeholder", t(key));
+  });
+  const cur = $("ui-lang-current");
+  if (cur) cur.textContent = UI_LANG_NAMES[CURRENT_UI_LANG] || "English";
+  document.querySelectorAll(".lang-option").forEach(o => {
+    o.classList.toggle("active", o.dataset.lang === CURRENT_UI_LANG);
+  });
+}
+function setUILang(lang) {
+  if (!UI_STRINGS[lang]) lang = "en-IN";
+  CURRENT_UI_LANG = lang;
+  localStorage.setItem("vidya:ui_lang", lang);
+  applyTranslations();
+  const menu = $("ui-lang-menu"); if (menu) menu.style.display = "none";
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("#ui-lang-btn");
+  const opt = e.target.closest(".lang-option");
+  const menu = $("ui-lang-menu");
+  if (btn) {
+    if (menu) menu.style.display = menu.style.display === "none" ? "block" : "none";
+    e.stopPropagation();
+    return;
+  }
+  if (opt) {
+    setUILang(opt.dataset.lang);
+    e.stopPropagation();
+    return;
+  }
+  if (menu && menu.style.display !== "none") menu.style.display = "none";
+});
+
+// -------- Init --------
+function restorePreferences() {
+  try {
+    const eng = localStorage.getItem(STORAGE_KEYS.qaEngine);
+    if (eng && $("qa-engine")) $("qa-engine").value = eng;
+    const rw = localStorage.getItem(STORAGE_KEYS.rewriting);
+    if (rw && $("rewrite-toggle-select")) $("rewrite-toggle-select").value = rw;
+    const sl = localStorage.getItem(STORAGE_KEYS.srcLang);
+    if (sl && $("src-lang")) $("src-lang").value = sl;
+    const al = localStorage.getItem(STORAGE_KEYS.answerLang);
+    if (al && $("answer-lang")) $("answer-lang").value = al;
+    const tv = localStorage.getItem(STORAGE_KEYS.ttsVoice);
+    if (tv && $("tts-voice")) $("tts-voice").value = tv;
+  } catch (e) {}
+}
+restoreState();
+restorePreferences();
+applyTranslations();
+renderLoadedSummary();
+renderPrereadList();
+renderChat();
+refreshKeyStatus();
+</script>
+</body>
+</html>
