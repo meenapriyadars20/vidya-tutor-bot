@@ -4,30 +4,36 @@
 
 Built for the AI Office Hours (Tutor Bot) assignment.
 
+Repository: https://github.com/meenapriyadars20/vidya-tutor-bot
+
 ---
 
 ## What it does
 
 | Assignment expectation | How Vidya delivers |
 | --- | --- |
-| Take a transcript as input | URL, file upload, or paste. YouTube captions or Sarvam STT depending on source. |
-| Answer only from that transcript | Strict system prompt plus a verbatim-quote guardrail: the LLM must return a quote it copied from the transcript, and the backend rejects the answer if the quote is not actually in the transcript. |
-| Mimic a tutor explaining concepts | Chat interface with 5-turn conversation memory. Answers cite a timestamp. Speaks back in the same language as the student's question. |
+| Take a transcript as input | URL, file upload, or paste. Every URL is downloaded and transcribed with Sarvam Saarika so the STT pipeline runs end to end. |
+| Answer only from that transcript | Strict system prompt plus a verbatim-quote guardrail: the LLM must return short evidence quotes, and the backend rejects the answer if any surviving quote is not actually in the transcript. |
+| Mimic a tutor explaining concepts | Chat interface with 5-turn conversation memory. A warm, encouraging tutor persona is baked into the prompt. Answers cite timestamps. Speaks back in the required language and voice. |
 | Bonus: STT + TTS + LLM pipeline | Sarvam Saarika (STT), Sarvam-105b (LLM), Sarvam Bulbul (TTS). Fully voice-driven if you want it. |
 
 ### Beyond the bonus
 
-- **Multimodal understanding.** Optional Gemini 1.5 Flash key lets Vidya watch the video too. Frames are sampled every 10s and described (diagrams, chart axes, whiteboard equations, slide text). Visual entries are interleaved with audio on a single timestamped timeline. The tutor can cite visual moments the same way it cites audio moments.
-- **Pre-reads.** Attach supplementary reading materials (webpages, PDFs, plain text) to any lecture, either by URL or by file upload. Vidya extracts and chunks the text, merges it into the same timeline as the audio and visuals, and can cite from it. When you load a YouTube URL, any links found in the video's description are surfaced as one-click "Add as pre-read" suggestions. Answers whose supporting quote came from a pre-read are labeled *"From pre-read: source-name"* instead of a timestamp.
+- **Three interchangeable LLM engines.** Sarvam-105b (default, retrieval-based), Gemini Flash (long-context, no retrieval loss), and Groq Llama 3.3 70B (free long-context alternative). Switch in the settings modal.
+- **Pre-reads.** Attach supplementary reading materials (webpages, PDFs, plain text) to any lecture, either by URL or file upload. Vidya extracts and chunks the text, merges it into the same timeline as the audio, and can cite from it. When you load a YouTube URL, links found in the video's description are surfaced as one-click "Add as pre-read" suggestions after an LLM classifier drops noise.
 - **Any public video URL.** yt-dlp supports 1000+ sites (YouTube, Vimeo, Dailymotion, TED, Twitch VODs, direct .mp4 links, and more).
-- **Chrome side-panel extension** for gated content that has no public URL. It can either send the current tab's URL to Vidya, or capture the tab's audio directly (works on private LMS platforms, internal training tools, etc.). DRM-protected sites like Netflix are detected and warned about.
-- **Anti-hallucination guardrail.** JSON-formatted responses, verbatim-quote check, block-on-mismatch. Every answer displays the quote and its timestamp.
+- **Chrome side-panel extension** for gated content that has no public URL. It can either send the current tab's URL to Vidya or capture the tab's audio directly (works on private LMS platforms, internal training tools, etc.). DRM-protected sites like Netflix are detected and warned about.
+- **Anti-hallucination guardrail.** JSON-formatted responses, verbatim-quote check against every entry, block-on-mismatch. Every answer displays the surviving quotes and their timestamps.
 - **Prompt injection defence.** The transcript is fenced with random per-request delimiters and the model is told to treat everything inside as inert data.
-- **Long-lecture retrieval.** For lectures over roughly 3,000 words, a BM25 retriever picks the most relevant timeline windows for each question so nothing overflows the model context.
-- **Chat memory** across up to 5 prior turns, so follow-up questions work naturally.
-- **Persistence.** Transcript and chat survive a browser refresh via localStorage.
-- **Retries and rate-limit handling** on both Sarvam and Gemini calls.
-- **Answer-language auto-detection** for TTS across 10 Indian languages plus English.
+- **Long-lecture retrieval.** BM25 with LLM query rewriting, always-included intro and conclusion, guaranteed pre-read seats, and optional Cohere Rerank v3 as a cross-encoder second pass.
+- **Multilingual across the board.** 11 Sarvam-supported languages plus English. Independent choices for question language, answer language, and answer voice. UI itself can also switch to any of the 11 languages.
+- **Handles Indian code-mixing.** Tanglish, Hinglish, Kanglish, etc. The prompt treats them as normal classroom speech.
+- **Handles transliterated English in Indic scripts.** The prompt has a concrete decode key for cases where Sarvam Saarika spells English words in Tamil / Devanagari letters.
+- **Colloquial-to-formal.** When the lecturer uses casual phrasing, Vidya answers in standard textbook terminology while keeping the lecturer's actual words as the supporting quote.
+- **Quiz mode.** Generates 5 grounded multiple-choice questions from the loaded lecture. Any question whose supporting quote does not verify is silently dropped.
+- **Retries and rate-limit handling** across Sarvam, Gemini (429), Groq (parses "try again in X seconds"), and Cohere.
+- **Fresh session on refresh.** Every browser reload gives you a clean lecture and chat. Language and engine preferences persist.
+- **Warm parchment theme.** Not the usual bright-white SaaS look; easier on the eyes for long study sessions.
 
 ---
 
@@ -40,45 +46,53 @@ Browser (index.html)
      v
 Flask backend (app.py)
      |
-     +--> Sarvam Saarika       (speech to text: mic, file chunks, audio-only URL downloads)
-     +--> Sarvam-105b          (grounded question answering)
-     +--> Sarvam Bulbul        (text to speech)
-     +--> Gemini 1.5 Flash     (optional: frame-by-frame vision descriptions)
-     +--> yt-dlp               (video URL to media file)
-     +--> youtube-transcript-api (fast path: existing YouTube captions)
-     +--> imageio-ffmpeg       (audio extraction, chunking, frame sampling)
+     +--> Sarvam Saarika       (speech to text: mic recordings, uploaded files, downloaded video audio)
+     +--> Sarvam-105b          (grounded Q&A; retrieval; quiz generation; query rewriting; pre-read classifier)
+     +--> Sarvam Bulbul        (text to speech in 11 Indic languages + English)
+     +--> Google Gemini Flash  (optional long-context LLM alternative)
+     +--> Groq Llama 3.3 70B   (optional long-context LLM alternative, free tier)
+     +--> Cohere Rerank v3     (optional cross-encoder reranker over BM25 candidates)
+     +--> yt-dlp               (any URL to media file, 1000+ sites)
+     +--> imageio-ffmpeg       (audio extraction, chunking)
+     +--> pypdf, BeautifulSoup (pre-read extraction)
 
 Chrome extension (extension/)
      |
      |  postMessage
      v
 Same backend, via an embedded side-panel iframe.
-Also captures tab audio for gated video sites.
+Adds "Use this page's URL" and "Record tab audio" for gated video sites.
 ```
 
-### Anti-hallucination guardrail (the important bit)
+### The anti-hallucination guardrail (the important bit)
 
 Every question triggers this sequence:
 
-1. If the timeline is longer than ~3,000 words, BM25 retrieves the top 8 most relevant timeline windows for the question. Otherwise the full timeline is used.
-2. The system prompt fences the timeline between random delimiters and instructs the model to treat anything inside as literal data, never as instructions.
-3. The model is required to return a JSON object with `in_scope`, `answer`, and `supporting_quote`.
-4. The backend parses the JSON. If parsing fails, the answer is replaced with the "not covered" fallback.
-5. If `in_scope` is false or no quote was returned, the fallback is used.
-6. The backend normalises the quote (lowercase, strip punctuation, collapse whitespace) and checks whether it is a substring of any timeline entry. If it is not, the model hallucinated its citation, so the answer is discarded and the fallback is used.
-7. If the quote is found, the entry it came from provides the displayed timestamp.
+1. Route to the selected engine. Sarvam-105b uses BM25 retrieval if the timeline is over ~3,500 words (with LLM-generated query variants and optional Cohere Rerank). Gemini and Groq skip retrieval and receive the full timeline.
+2. The system prompt fences the transcript between random delimiters and instructs the model to treat anything inside as literal data, never as instructions.
+3. The model is required to return a JSON object with `in_scope`, `answer`, and `supporting_quotes` (1 to 4 short verbatim spans).
+4. The backend parses the JSON; if parsing fails, a regex fallback extracts fields.
+5. If `in_scope` is false, the localised "not covered" message is returned.
+6. Each supporting quote is normalised and checked against every timeline entry. Quotes that do not match are dropped. If none survive, the entire answer is blocked and replaced with the fallback.
+7. Surviving quotes are shown with their timestamps (or pre-read source names).
 
-This means a hallucinated answer that fakes a quote from the lecture is always caught and blocked before the student sees it.
+A model fabricating a plausible-sounding citation is caught and blocked before the student sees it.
 
 ---
 
 ## Requirements
 
 - Windows, macOS, or Linux
-- Python 3.10+
+- Python 3.10 or later
 - A **Sarvam API key** from https://dashboard.sarvam.ai (free tier is enough for a demo)
-- Optional: a **Google Gemini API key** from https://aistudio.google.com/apikey (free tier: 1500 requests/day) to unlock visual understanding
-- Chrome or Edge for the extension
+
+**Optional but strongly recommended:**
+
+- A **Groq API key** from https://console.groq.com. Free tier is 500K tokens/day and 14,400 requests/day, no card required. Groq is the best long-context engine for Indian code-mixed and transliterated content.
+- A **Google Gemini API key** from https://aistudio.google.com/apikey. Alternative long-context engine. Free tier is tighter than Groq (20 requests/day on Flash Latest as of writing).
+- A **Cohere API key** from https://dashboard.cohere.com. Enables Cohere Rerank v3 to improve retrieval precision. Free trial gives 1,000 calls/month.
+
+Chrome or Edge is needed only for the browser extension.
 
 ---
 
@@ -86,39 +100,57 @@ This means a hallucinated answer that fakes a quote from the lecture is always c
 
 ```bash
 # 1. Clone
-git clone https://github.com/<your-username>/vidya.git
-cd vidya
+git clone https://github.com/meenapriyadars20/vidya-tutor-bot.git
+cd vidya-tutor-bot
 
 # 2. Install dependencies
-python -m pip install flask flask-cors requests python-dotenv \
-                     youtube-transcript-api imageio-ffmpeg yt-dlp \
-                     pypdf beautifulsoup4
+python -m pip install -r requirements.txt
 
-# 3. Run the server
+# 3. Create a .env file with your keys
+#    (Sarvam is required. The others are optional.)
+```
+
+Create a file named `.env` at the repo root with this content, substituting your own keys:
+
+```
+SARVAM_API_KEY=sk_...
+GROQ_API_KEY=gsk_...
+GEMINI_API_KEY=AIza...
+COHERE_API_KEY=...
+```
+
+Then run the server:
+
+```bash
 python app.py
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
-
-Paste your Sarvam API key into the setup box and click Save. Optionally paste a Gemini key too.
+Open http://127.0.0.1:5000 in Chrome or Edge.
 
 ---
 
 ## Using the website
 
 1. **Load a lecture** in one of three ways:
-   - **Video URL**: paste any public link and click Load. YouTube URLs use captions when available (fast). Everything else is downloaded and transcribed with Sarvam. Tick "Include visuals" if you also want Gemini to describe the video frames.
-   - **File upload**: drop an audio or video file. Same pipeline as a URL, without the download step.
+   - **Video URL**: paste any public video link and click Load. Vidya downloads audio via yt-dlp and transcribes with Sarvam Saarika.
+   - **File upload**: drop an audio or video file. Same pipeline, without the download step.
    - **Paste text**: paste an existing transcript directly.
-2. **Ask a question** by typing or by clicking Record to speak.
-3. **Read the answer** with its supporting quote and timestamp. Click Speak to hear it in the source's language.
-4. Ask **follow-up questions**; the last 5 turns of chat are used as context.
+2. **Optional: attach pre-reads** (PDFs, articles, docs). URL or file. YouTube-description links are auto-suggested after an LLM classifier drops noise.
+3. **Choose your engine** in the settings modal (gear icon → Advanced reasoning options):
+   - **Sarvam-105b** (default): fast, retrieval-based, uses about 5K tokens per question.
+   - **Gemini Flash (latest)**: long-context, no retrieval loss. Free tier has strict per-day limits.
+   - **Groq Llama 3.3 70B**: long-context, best for code-mixed and transliterated Indian content, free tier is generous.
+4. **Pick your languages** using the three dropdowns at the top: Question Language (STT hint), Answer Language (LLM output), Answer Voice (TTS).
+5. **Ask a question** by typing or clicking Record and speaking.
+6. **Read the answer.** Click "Show evidence (N)" to reveal the verified quotes with timestamps. Click Speak to hear the answer, Pause to hold it.
+7. **Follow up** naturally. The last 5 turns are used as context.
+8. **Try a quiz** with the Take a Quiz button. 5 grounded multiple-choice questions with per-question explanations.
 
-Try an out-of-scope question after loading a lecture to see the guardrail block the answer and return "not covered in this lecture."
+Try an out-of-scope question after loading a lecture to see the guardrail return "not covered in this lecture" in your chosen language.
 
 ---
 
-## Installing the Chrome extension
+## Installing the Chrome extension (optional)
 
 For private video platforms (internal LMS, gated course sites, corporate training tools) that Vidya cannot download directly:
 
@@ -126,9 +158,9 @@ For private video platforms (internal LMS, gated course sites, corporate trainin
 2. Toggle **Developer mode** on (top right).
 3. Click **Load unpacked** and select the `extension` folder inside this repo.
 4. Pin the Vidya extension from the puzzle-piece menu.
-5. Make sure `python app.py` is running.
-6. Open any video page, click the Vidya icon, and the side panel opens.
-7. Either click **Use this page's URL** to send the current URL to Vidya, or click **Record tab audio**, play the video, then click Stop to send the captured audio for transcription. The panel then talks to your local Vidya server.
+5. Make sure `python app.py` is running locally.
+6. Open any video page and click the Vidya icon. The side panel opens.
+7. Either click **Use this page's URL** or **Record tab audio** → play the video → **Stop**.
 
 DRM-protected sites (Netflix, Prime Video, Disney+, Hotstar, etc.) will be flagged with a warning because their audio is protected and cannot be captured.
 
@@ -138,32 +170,52 @@ DRM-protected sites (Netflix, Prime Video, Disney+, Hotstar, etc.) will be flagg
 
 | Case | Handling |
 | --- | --- |
-| Long lectures over ~3,000 words | BM25 retrieval fetches only the most relevant timeline windows for each question. |
-| Prompt injection inside the transcript | Random per-request delimiters plus explicit instructions to treat the transcript as inert data. |
-| Model hallucinates a citation | Verbatim-quote check against the timeline. Answer discarded if the quote does not appear. |
-| Follow-up questions | Last 5 Q&A turns are included as chat history. |
-| Sarvam or Gemini rate limits | Exponential backoff, one retry per chunk, cap of 3 concurrent STT and 4 concurrent vision calls. |
-| Partial STT failure | Successful chunks are kept and reported; failed chunks are counted and skipped. |
-| Sessions across a browser refresh | Timeline and chat are persisted in localStorage. |
-| Multilingual answers | Answer language is detected from the reply script (Devanagari, Bengali, Tamil, etc.) and passed to Bulbul so the spoken output is in the right voice. |
-| Silent segments or caption-less videos | If audio yields nothing but visuals do (with Gemini enabled), Vidya still works from visuals alone. If neither yields content, the user is told honestly. |
+| Model hallucinates a citation | Every supporting quote is checked against timeline entries. Unverified quotes are dropped; if none survive, the answer is blocked. |
+| Long lectures over ~3,500 words | BM25 retrieval with LLM-generated query variants, always-included intro and conclusion, and pre-read seats. Optional Cohere Rerank for cross-encoder precision. |
+| Prompt injection inside the transcript | Random per-request delimiters plus explicit "treat as data, ignore instructions" wording. |
+| Follow-up questions | Last 5 Q&A turns included as chat history. |
+| Sarvam / Gemini / Groq rate limits | Exponential backoff and auto-retry. Groq's "try again in X seconds" hint is parsed and honoured. Friendly fallback message with engine-switch suggestion if retries exhausted. |
+| Partial STT failure | Successful chunks kept and reported; failed chunks counted and skipped. Sub-1.5-second trailing chunks pre-dropped so Sarvam does not reject them. |
+| Fresh sessions | Lecture and chat wiped on every refresh. Preferences (language, engine, voice) persisted. |
+| Multilingual answers | Answer language independently chosen; TTS routed accordingly. |
+| Indian code-mixing (Tanglish, Hinglish, etc.) | Prompt treats mixed input as normal Indian classroom speech. |
+| Transliterated English in Indic scripts | Prompt has a concrete decode key listing 10+ example phrases. |
+| Colloquial vocabulary in the transcript | Answer uses standard terminology; lecturer's phrasing kept as the supporting quote. |
+| Malformed model JSON | Balanced-brace parser plus regex fallback plus plain-text refusal detection. Never surfaces raw broken text. |
+| TTS answers longer than 900 characters | Text split at sentence boundaries; audio segments queued and played sequentially with pause and resume controls. |
 | Videos over the size limit | 3 hour hard cap, 1 hour soft warning before processing. |
 | DRM sites in the extension | Detected against a known-host list and warned about before recording. |
-| Malformed model output | JSON parse failure returns the "not covered" fallback rather than surfacing broken text. |
+
+---
+
+## Edge cases Vidya does NOT handle (be honest)
+
+- **Visual understanding of video frames.** Previously supported via Gemini Vision; removed because per-frame calls burned quota. Anything shown on screen but never spoken is invisible to Vidya.
+- **Real token streaming.** The UI uses a typing animation after the full answer is received. Nice feel, but no first-token latency improvement.
+- **Speaker diarisation.** Not toggled on; multi-speaker discussions appear as one continuous voice.
+- **Non-Sarvam languages.** Sarvam Saarika supports 11 languages; French/German/Spanish/Chinese lectures produce empty or garbled transcripts.
+- **Cross-lecture library.** One active lecture at a time.
+- **Editable transcripts.** Cannot inline-correct STT mistakes.
+- **DRM streaming platforms in the extension.** Netflix, Disney+ etc. block audio capture.
+- **Automated evaluation harness.** No batch test suite over a known QA bank.
+
+Full deep-dive on design decisions and every edge case is in `SOLUTION.md` if you kept that file locally (it is not committed).
 
 ---
 
 ## Project layout
 
 ```
-vidya/
+vidya-tutor-bot/
 ├── app.py                     # Flask backend (all endpoints and pipelines)
-├── index.html                 # Main website (chat UI, purple/blue/white theme)
+├── index.html                 # Single-page frontend (chat UI, warm parchment theme)
 ├── extension/
 │   ├── manifest.json          # Chrome Manifest V3
 │   ├── background.js          # Service worker
 │   └── sidepanel.html         # Side-panel UI with tab-audio capture
-├── .env                       # Auto-created; holds SARVAM_API_KEY and GEMINI_API_KEY
+├── requirements.txt
+├── render.yaml                # One-file config for Render.com deployment
+├── .env                       # Local only, git-ignored; holds API keys
 ├── README.md
 └── .gitignore
 ```
@@ -172,67 +224,38 @@ vidya/
 
 ## Design decisions
 
-- **Sarvam-105b** for question answering. Its 8k+ context handles typical lecture sizes; retrieval covers the rest.
-- **Sarvam Saarika 2.5** for STT. Chunking at 30s keeps each call well inside the per-request duration limit and enables parallel transcription.
-- **Sarvam Bulbul 2** for TTS with automatic language routing based on the answer's script.
-- **Gemini 1.5 Flash** for vision because it has a generous free tier and returns concise, structured descriptions for lecture-style frames.
-- **yt-dlp** rather than a YouTube-only downloader because the assignment naturally extends to any public video source.
-- **BM25 with per-request idf** rather than semantic embeddings because it has no dependency footprint, no API cost, and is more than good enough at picking a handful of relevant lecture windows.
-- **JSON output plus quote check** rather than a second LLM verification call because it costs half as many tokens and catches the same class of hallucination.
-- **Chrome side panel** (Manifest V3) rather than a popup because a panel stays open while the user watches the video.
+- **Sarvam-105b** as the default engine. It is fast, has a comfortable context, and is what the assignment asks for. Retrieval keeps it inside its context window for long lectures.
+- **Groq Llama 3.3 70B** as the recommended engine for Indian code-mixed and transliterated content. In practice, Groq handled these edge cases better than Sarvam-105b in testing.
+- **Gemini Flash** kept as a second long-context option because Google's key is different from Groq's and gives redundancy.
+- **Cohere Rerank v3** as an optional precision boost on top of BM25.
+- **BM25 with LLM-generated query variants** rather than semantic embeddings. Zero embedding infrastructure, still catches paraphrases via the query variants.
+- **JSON output + verbatim quote check** rather than a second LLM verification call. Half the tokens, same protection against hallucinated citations.
+- **Chrome side panel (Manifest V3)** rather than a popup, so the panel stays open while the student watches the video.
+- **Fresh session on every refresh.** Preferences persist; content does not. Reduces confusion when a student comes back later.
 
 ---
 
-## What is not included
+## Deploying a live demo on Render
 
-- Streaming answers (works fine without it for the demo)
-- Speaker diarisation (Sarvam supports it; not needed for lectures)
-- KaTeX rendering for math (cosmetic)
-- User accounts (this runs locally)
+If you want your interviewer to click a link instead of installing Python locally, `render.yaml` is already at the repo root.
 
----
-
-## Deploying a live demo
-
-If you want your interviewer to click a link instead of installing Python locally, the fastest path is Render.com. Everything you need is in the repo.
-
-### One-time setup
-
-1. Push the repo to GitHub (private is fine).
-2. Sign up at https://render.com with your GitHub account.
-3. Click **New +** → **Web Service** → connect your GitHub repo.
-4. Fill in:
-   - **Environment**: Python 3
-   - **Build command**: `pip install -r requirements.txt`
-   - **Start command**: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300`
-   - **Instance type**: Free
-5. Under **Environment Variables**, add:
-   - `SARVAM_API_KEY`
+1. Sign up at https://render.com with your GitHub account.
+2. Click **New +** → **Web Service** → select this repo.
+3. Render reads `render.yaml` and pre-fills the settings. Confirm **Free** plan.
+4. Scroll to **Environment Variables** and add:
+   - `SARVAM_API_KEY` (required)
+   - `GROQ_API_KEY` (strongly recommended)
    - `GEMINI_API_KEY` (optional)
    - `COHERE_API_KEY` (optional)
-6. Click **Create Web Service**. First build takes 2 to 5 minutes.
-7. Render gives you a URL like `https://vidya-tutor-bot.onrender.com`. Send this to your interviewer.
+5. Click **Create Web Service**. First build takes ~5 minutes.
+6. Render gives you a URL like `https://vidya-xxxx.onrender.com`. Send that to your interviewer.
 
-### requirements.txt
+### Two things to know about Render's free tier
 
-Create a `requirements.txt` at the repo root with:
+- **Cold start**: after 15 min of no traffic the server sleeps. First visitor takes ~40 seconds to wake. Warn the interviewer.
+- **Shared quotas**: your Sarvam / Groq / Gemini / Cohere quotas are used by every visitor. Rotate the keys after the interview.
 
-```
-flask
-flask-cors
-requests
-python-dotenv
-youtube-transcript-api
-imageio-ffmpeg
-yt-dlp
-pypdf
-beautifulsoup4
-gunicorn
-```
-
-### Warning about live deploys
-
-Anyone who opens the link uses your API keys. Set spending caps on Sarvam and Gemini before sharing. Consider adding a password check to the app if you plan to share widely.
+---
 
 ## Licence
 
@@ -240,8 +263,8 @@ MIT.
 
 ## Credits
 
-- Sarvam AI for the STT, TTS, and LLM APIs
+- Sarvam AI for the STT (Saarika), TTS (Bulbul), and LLM (Sarvam-105b) APIs
+- Groq for the free Llama 3.3 70B endpoint
 - Google DeepMind for Gemini
-- yt-dlp maintainers
-- youtube-transcript-api
-- imageio-ffmpeg
+- Cohere for Rerank v3
+- yt-dlp, imageio-ffmpeg, pypdf, beautifulsoup4 maintainers
