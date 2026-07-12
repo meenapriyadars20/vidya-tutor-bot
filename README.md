@@ -15,12 +15,12 @@ Repository: https://github.com/meenapriyadars20/vidya-tutor-bot
 | Take a transcript as input | URL, file upload, or paste. Every URL is downloaded and transcribed with Sarvam Saarika so the STT pipeline runs end to end. |
 | Answer only from that transcript | Strict system prompt plus a verbatim-quote guardrail: the LLM must return short evidence quotes, and the backend rejects the answer if any surviving quote is not actually in the transcript. |
 | Mimic a tutor explaining concepts | Chat interface with 5-turn conversation memory. A warm, encouraging tutor persona is baked into the prompt. Answers cite timestamps. Speaks back in the required language and voice. |
-| Bonus: STT + TTS + LLM pipeline | Sarvam Saarika (STT), Sarvam-105b (LLM), Sarvam Bulbul (TTS). Fully voice-driven if you want it. |
+| Bonus: STT + TTS + LLM pipeline | Sarvam Saarika (STT), Groq Llama 3.3 70B (default reasoning LLM), Sarvam-105b (retrieval-based reasoning LLM), Gemini Flash (long-context alternative), and Sarvam Bulbul (TTS). Fully voice-driven if you want it. |
 
 ### Beyond the bonus
 
 - **Three interchangeable LLM engines.** Groq Llama 3.3 70B (default, free long-context, best for Indian code-mixed content), Sarvam-105b (retrieval-based), and Gemini Flash (long-context alternative). Switch in the settings modal.
-- **Pre-reads.** Attach supplementary reading materials (webpages, PDFs, plain text) to any lecture, either by URL or file upload. Vidya extracts and chunks the text, merges it into the same timeline as the audio, and can cite from it. When you load a YouTube URL, links found in the video's description are surfaced as one-click "Add as pre-read" suggestions after an LLM classifier drops noise.
+- **Pre-reads.** Attach supplementary reading materials to any lecture, either by URL or file upload. File support is broad: PDF, DOCX, HTML, XML, TXT, MD, Markdown, RST, CSV, TSV, JSON, YAML, LOG, RTF, TEX, SRT, VTT, IPYNB, and a plain-text fallback for anything else that decodes as text. Vidya extracts and chunks the text, merges it into the same timeline as the audio, and can cite from it. When you load a URL, links found in the video description are surfaced as one-click "Add as pre-read" suggestions after an LLM classifier drops social / merch / subscribe noise.
 - **Any public video URL.** yt-dlp supports 1000+ sites (YouTube, Vimeo, Dailymotion, TED, Twitch VODs, direct .mp4 links, and more).
 - **Chrome side-panel extension** for gated content that has no public URL. It can either send the current tab's URL to Vidya or capture the tab's audio directly (works on private LMS platforms, internal training tools, etc.). DRM-protected sites like Netflix are detected and warned about.
 - **Anti-hallucination guardrail.** JSON-formatted responses, verbatim-quote check against every entry, block-on-mismatch. Every answer displays the surviving quotes and their timestamps.
@@ -30,7 +30,7 @@ Repository: https://github.com/meenapriyadars20/vidya-tutor-bot
 - **Handles Indian code-mixing.** Tanglish, Hinglish, Kanglish, etc. The prompt treats them as normal classroom speech.
 - **Handles transliterated English in Indic scripts.** The prompt has a concrete decode key for cases where Sarvam Saarika spells English words in Tamil / Devanagari letters.
 - **Colloquial-to-formal.** When the lecturer uses casual phrasing, Vidya answers in standard textbook terminology while keeping the lecturer's actual words as the supporting quote.
-- **Quiz mode.** Generates 5 grounded multiple-choice questions from the loaded lecture. Any question whose supporting quote does not verify is silently dropped.
+- **Quiz mode.** Generates 5 grounded multiple-choice questions from the loaded lecture. Any question whose supporting quote does not verify (strict substring first, fuzzy word-overlap fallback second) is silently dropped, so what the student sees is guaranteed grounded. Uses the same engine you selected for Q&A, with automatic Sarvam fallback if Groq is rate-limited.
 - **Retries and rate-limit handling** across Sarvam, Gemini (429), Groq (parses "try again in X seconds"), and Cohere.
 - **Fresh session on refresh.** Every browser reload gives you a clean lecture and chat. Language and engine preferences persist.
 - **Warm parchment theme.** Not the usual bright-white SaaS look; easier on the eyes for long study sessions.
@@ -47,10 +47,10 @@ Browser (index.html)
 Flask backend (app.py)
      |
      +--> Sarvam Saarika       (speech to text: mic recordings, uploaded files, downloaded video audio)
-     +--> Sarvam-105b          (grounded Q&A; retrieval; quiz generation; query rewriting; pre-read classifier)
+     +--> Groq Llama 3.3 70B   (DEFAULT reasoning engine; long-context; free tier; used for Q&A and quiz)
+     +--> Sarvam-105b          (retrieval-based reasoning fallback; query rewriting; pre-read classifier)
+     +--> Google Gemini Flash  (optional long-context reasoning alternative)
      +--> Sarvam Bulbul        (text to speech in 11 Indic languages + English)
-     +--> Google Gemini Flash  (optional long-context LLM alternative)
-     +--> Groq Llama 3.3 70B   (optional long-context LLM alternative, free tier)
      +--> Cohere Rerank v3     (optional cross-encoder reranker over BM25 candidates)
      +--> yt-dlp               (any URL to media file, 1000+ sites)
      +--> imageio-ffmpeg       (audio extraction, chunking)
@@ -73,7 +73,7 @@ Every question triggers this sequence:
 3. The model is required to return a JSON object with `in_scope`, `answer`, and `supporting_quotes` (1 to 4 short verbatim spans).
 4. The backend parses the JSON; if parsing fails, a regex fallback extracts fields.
 5. If `in_scope` is false, the localised "not covered" message is returned.
-6. Each supporting quote is normalised and checked against every timeline entry. Quotes that do not match are dropped. If none survive, the entire answer is blocked and replaced with the fallback.
+6. Each supporting quote is normalised and checked against every timeline entry. If the strict substring check fails, a fuzzy word-overlap check (at least 55 percent of content words) is tried as a fallback to tolerate light paraphrasing. Quotes that fail both are dropped. If no quotes survive, the entire answer is blocked and replaced with the fallback.
 7. Surviving quotes are shown with their timestamps (or pre-read source names).
 
 A model fabricating a plausible-sounding citation is caught and blocked before the student sees it.
@@ -135,8 +135,8 @@ Open http://127.0.0.1:5000 in Chrome or Edge.
 ## Using the website
 
 1. **Load a lecture** in one of three ways:
-   - **Video URL**: paste any public video link and click Load. Vidya downloads audio via yt-dlp and transcribes with Sarvam Saarika.
-   - **File upload**: drop an audio or video file. Same pipeline, without the download step.
+   - **Video URL**: paste any public video link and click Load. Vidya downloads audio via yt-dlp and transcribes with Sarvam Saarika. Note that YouTube blocks yt-dlp downloads from cloud server IPs, so this path works fully when Vidya runs locally, but the hosted (Render / cloud) version cannot download YouTube URLs. Use the file upload path for the hosted demo.
+   - **File upload**: drop an audio or video file. Same pipeline, without the download step. This is the recommended path on any hosted deployment.
    - **Paste text**: paste an existing transcript directly.
 2. **Optional: attach pre-reads** (PDFs, articles, docs). URL or file. YouTube-description links are auto-suggested after an LLM classifier drops noise.
 3. **Choose your engine** in the settings modal (gear icon → Advanced reasoning options):
@@ -173,7 +173,7 @@ DRM-protected sites (Netflix, Prime Video, Disney+, Hotstar, etc.) will be flagg
 
 | Case | Handling |
 | --- | --- |
-| Model hallucinates a citation | Every supporting quote is checked against timeline entries. Unverified quotes are dropped; if none survive, the answer is blocked. |
+| Model hallucinates a citation | Every supporting quote is checked against timeline entries (strict substring first, fuzzy 55 percent word-overlap second). Unverified quotes are dropped; if none survive, the answer is blocked and replaced with the graceful "not covered" fallback. |
 | Long lectures over ~3,500 words | BM25 retrieval with LLM-generated query variants, always-included intro and conclusion, and pre-read seats. Optional Cohere Rerank for cross-encoder precision. |
 | Prompt injection inside the transcript | Random per-request delimiters plus explicit "treat as data, ignore instructions" wording. |
 | Follow-up questions | Last 5 Q&A turns included as chat history. |
@@ -200,6 +200,7 @@ DRM-protected sites (Netflix, Prime Video, Disney+, Hotstar, etc.) will be flagg
 - **Cross-lecture library.** One active lecture at a time.
 - **Editable transcripts.** Cannot inline-correct STT mistakes.
 - **DRM streaming platforms in the extension.** Netflix, Disney+ etc. block audio capture.
+- **YouTube URL downloads on cloud hosting.** YouTube treats cloud server IPs (Render, Fly, AWS, GCP) as bots and blocks yt-dlp downloads from them. This affects every yt-dlp-based hosted app, not Vidya specifically. Solution: use file upload on hosted deployments, or run locally where your home IP is trusted.
 - **Automated evaluation harness.** No batch test suite over a known QA bank.
 
 Full deep-dive on design decisions and every edge case is in `SOLUTION.md` if you kept that file locally (it is not committed).
