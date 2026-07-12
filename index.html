@@ -1042,7 +1042,7 @@
         <button id="add-preread-url" class="secondary" data-i18n="addUrl">Add URL</button>
       </div>
       <div class="row" style="margin-top: 8px;">
-        <input type="file" id="preread-file" accept=".pdf,.html,.htm,.txt,.md" />
+        <input type="file" id="preread-file" accept=".pdf,.docx,.html,.htm,.xhtml,.xml,.txt,.md,.markdown,.rst,.csv,.tsv,.json,.yaml,.yml,.log,.rtf,.tex,.srt,.vtt,.ipynb" />
         <button id="add-preread-file" class="secondary" data-i18n="addFile">Add File</button>
       </div>
       <div class="status" id="preread-status"></div>
@@ -1250,13 +1250,24 @@ async function startQuiz() {
   $("quiz-content").innerHTML = "";
   const answerLang = ($("answer-lang") && $("answer-lang").value) || "auto";
   try {
+    const qaEngine = ($("qa-engine") && $("qa-engine").value) || "groq";
     const r = await fetch("/api/quiz", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({timeline: TIMELINE, num_questions: 5, language: answerLang}),
+      body: JSON.stringify({
+        timeline: TIMELINE,
+        num_questions: 5,
+        language: answerLang,
+        qa_engine: qaEngine,
+      }),
     });
     const j = await r.json();
     if (j.quiz_unavailable) {
+      console.log("[Vidya Quiz] engine used:", j.debug_engine);
+      console.log("[Vidya Quiz] last error:", j.debug_last_error);
+      console.log("[Vidya Quiz] context chars:", j.debug_context_chars);
+      console.log("[Vidya Quiz] call trace:", j.debug_call_trace);
+      console.log("[Vidya Quiz] raw model output preview:\n" + (j.debug_raw_preview || "(empty)"));
       $("quiz-loading").innerHTML =
         '<div style="padding: 30px 24px; text-align: center; color: var(--text-2); font-size: 14px; line-height: 1.65;">' +
         escapeHtml(j.error) +

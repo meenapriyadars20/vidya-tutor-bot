@@ -731,6 +731,31 @@ def extract_text_from_html_bytes(html_bytes: bytes) -> tuple:
         return "", f"html parse error: {e}"
 
 
+def extract_text_from_docx_bytes(docx_bytes: bytes) -> tuple:
+    """Extract text from a .docx (which is a zip of XML files) using stdlib only."""
+    try:
+        import zipfile
+        from xml.etree import ElementTree as ET
+    except ImportError as e:
+        return "", f"stdlib import error: {e}"
+    try:
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as z:
+            try:
+                xml_content = z.read("word/document.xml").decode("utf-8", errors="replace")
+            except KeyError:
+                return "", "not a valid docx (missing word/document.xml)"
+        root = ET.fromstring(xml_content)
+        # Word text elements are <w:t> under the wordprocessingml namespace.
+        texts = []
+        for elem in root.iter():
+            if elem.tag.endswith("}t") and elem.text:
+                texts.append(elem.text)
+        joined = " ".join(texts).strip()
+        return re.sub(r"\s+", " ", joined), None
+    except Exception as e:
+        return "", f"docx parse error: {e}"
+
+
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> tuple:
     try:
         from pypdf import PdfReader
@@ -812,16 +837,34 @@ def add_preread():
         ext = os.path.splitext(name)[1].lower()
         if ext == ".pdf":
             text, err = extract_text_from_pdf_bytes(raw)
-        elif ext in (".html", ".htm"):
+        elif ext in (".html", ".htm", ".xhtml", ".xml"):
             text, err = extract_text_from_html_bytes(raw)
-        elif ext in (".txt", ".md", ""):
+        elif ext == ".docx":
+            text, err = extract_text_from_docx_bytes(raw)
+        elif ext in (".txt", ".md", ".markdown", ".rst", ".csv", ".tsv",
+                     ".json", ".yaml", ".yml", ".log", ".rtf", ".tex",
+                     ".srt", ".vtt", ".ipynb", ""):
             try:
                 text = raw.decode("utf-8", errors="replace")
                 err = None
             except Exception as e:
                 text, err = "", str(e)
         else:
-            return jsonify({"error": f"Unsupported file type: {ext}. Try .pdf, .html, .txt, or .md."}), 400
+            # Last-resort fallback: try to decode as UTF-8 text. This lets
+            # any plain-text-like format work even if we did not list it.
+            try:
+                text = raw.decode("utf-8", errors="replace")
+                # If the decoded content looks binary (lots of replacement
+                # characters or control bytes), reject it politely.
+                if text.count("�") > 40 or sum(1 for c in text[:2000] if ord(c) < 9) > 20:
+                    return jsonify({
+                        "error": f"That file type ({ext}) does not look like text. "
+                                 "Supported types include PDF, DOCX, HTML, TXT, MD, "
+                                 "CSV, JSON, RTF, SRT, VTT, and other plain-text formats."
+                    }), 400
+                err = None
+            except Exception as e:
+                return jsonify({"error": f"Could not read file: {e}"}), 400
         source = name
     else:
         payload = request.get_json(silent=True) or {}
@@ -1597,6 +1640,32 @@ def citation_for_quote(quote: str, entries: list) -> tuple:
     return "", ""
 
 
+def fuzzy_quote_match(quote: str, entries: list, threshold: float = 0.55) -> tuple:
+    """Fallback matcher: if strict substring fails, accept a citation when at
+    least `threshold` fraction of the quote's non-trivial words appear inside
+    a single entry. Groq and Sarvam sometimes lightly paraphrase; this lets
+    a well-supported answer survive minor rewording."""
+    quote_words = set(w for w in re.findall(r"\w+", quote.lower()) if len(w) > 2)
+    if len(quote_words) < 4:
+        return "", ""
+    best_overlap = 0.0
+    best_entry = None
+    for e in entries:
+        entry_words = set(w for w in re.findall(r"\w+", e["text"].lower()) if len(w) > 2)
+        if not entry_words:
+            continue
+        overlap = len(quote_words & entry_words) / len(quote_words)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_entry = e
+    if best_entry is None or best_overlap < threshold:
+        return "", ""
+    etype = best_entry.get("type", "audio")
+    if etype == "preread":
+        return best_entry.get("source", "pre-read"), "preread"
+    return format_timestamp(best_entry.get("start", 0)), etype
+
+
 def verify_quotes(raw_quotes: list, entries: list) -> list:
     """Filters a list of candidate quotes to those found in the timeline.
     Returns [{quote, citation, citation_type}] preserving input order."""
@@ -2012,6 +2081,9 @@ def quiz():
     if not sarvam_key:
         return jsonify({"error": "Save your Sarvam API key first."}), 400
 
+    gemini_key = get_gemini_key()
+    groq_key = get_groq_key()
+
     data = request.get_json(silent=True) or {}
     timeline = data.get("timeline")
     num_questions = int(data.get("num_questions") or 5)
@@ -2019,6 +2091,13 @@ def quiz():
     quiz_language = (data.get("language") or "auto").strip()
     if quiz_language not in SARVAM_LANGUAGE_NAMES and quiz_language != "auto":
         quiz_language = "auto"
+
+    requested_engine = (data.get("qa_engine") or "groq").strip().lower()
+    engine = requested_engine
+    if engine == "gemini-pro" and not gemini_key:
+        engine = "sarvam"
+    if engine == "groq" and not groq_key:
+        engine = "sarvam"
 
     if not (isinstance(timeline, list) and timeline):
         return jsonify({"error": "Load a lecture first."}), 400
@@ -2068,29 +2147,116 @@ def quiz():
         "LECTURE TIMELINE:\n---\n" + context_text + "\n---"
     )
 
-    headers = {"Authorization": f"Bearer {sarvam_key}", "Content-Type": "application/json"}
+    call_trace = []  # debug: capture per-attempt info
 
-    def _call_model(user_msg: str) -> tuple:
+    def _call_quiz_sarvam(user_msg: str) -> dict:
+        """Quiz-specific Sarvam call with higher creativity and longer output."""
         payload = {
             "model": CHAT_MODEL,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
             ],
-            "temperature": 0.3,
-            "max_tokens": 3000,
+            "temperature": 0.4,
+            "max_tokens": 3500,
         }
+        headers = {"Authorization": f"Bearer {sarvam_key}", "Content-Type": "application/json"}
         try:
             resp = requests.post(f"{SARVAM_BASE}/v1/chat/completions",
                                   headers=headers, json=payload, timeout=120)
         except requests.RequestException as e:
-            return None, f"network:{e}"
+            return {"error": f"network: {e}"}
         if resp.status_code != 200:
-            return None, f"http:{resp.status_code}"
+            return {"error": f"Sarvam {resp.status_code}: {resp.text[:300]}"}
         try:
-            return resp.json()["choices"][0]["message"]["content"], None
-        except (KeyError, IndexError, ValueError):
-            return None, "shape"
+            body = resp.json()
+            content = body["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            return {"error": f"parse: {e}", "raw": resp.text[:400]}
+        if not (content or "").strip():
+            # Empty content is not a real answer; treat as error so caller
+            # can decide whether to retry or fall back further.
+            finish = ""
+            try:
+                finish = body["choices"][0].get("finish_reason") or ""
+            except Exception:
+                pass
+            return {"error": f"sarvam returned empty content (finish_reason={finish!r})"}
+        return {"content": content, "engine": "sarvam"}
+
+    def _call_quiz_groq(user_msg: str) -> dict:
+        """Quiz-specific Groq call with higher creativity and longer output."""
+        payload = {
+            "model": GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": 0.4,
+            "max_tokens": 3500,
+        }
+        headers = {"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"}
+        try:
+            resp = requests.post(f"{GROQ_BASE}/chat/completions",
+                                  headers=headers, json=payload, timeout=90)
+        except requests.RequestException as e:
+            return {"error": f"network: {e}"}
+        if resp.status_code == 429:
+            wait_s = _parse_groq_retry_seconds(resp.text)
+            return {"error": f"Groq rate-limited (try again in {int(wait_s)}s)"}
+        if resp.status_code != 200:
+            return {"error": f"Groq {resp.status_code}: {resp.text[:300]}"}
+        try:
+            content = resp.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as e:
+            return {"error": f"parse: {e}"}
+        if not (content or "").strip():
+            return {"error": "groq returned empty content"}
+        return {"content": content, "engine": "groq"}
+
+    def _call_model(user_msg: str) -> tuple:
+        # Route through the same engine the user picked for Q&A. If it
+        # errors out with something rate-limit-shaped, try Sarvam-105b as a
+        # fallback so the quiz still generates.
+        def _try(eng: str):
+            if eng == "groq":
+                return _call_quiz_groq(user_msg)
+            if eng == "gemini-pro":
+                return call_gemini_pro_chat(system_prompt, [], user_msg, gemini_key)
+            return _call_quiz_sarvam(user_msg)
+
+        result = _try(engine)
+        call_trace.append({
+            "engine": engine,
+            "error": result.get("error"),
+            "content_length": len(result.get("content") or ""),
+            "content_preview": (result.get("content") or "")[:400],
+        })
+        if result.get("error"):
+            err_lower = str(result["error"]).lower()
+            looks_ratelimited = (
+                "rate-limit" in err_lower
+                or "rate limit" in err_lower
+                or "429" in err_lower
+                or "tokens per minute" in err_lower
+                or "quota" in err_lower
+            )
+            if looks_ratelimited and engine != "sarvam":
+                fallback = _try("sarvam")
+                call_trace.append({
+                    "engine": "sarvam (fallback)",
+                    "error": fallback.get("error"),
+                    "content_length": len(fallback.get("content") or ""),
+                    "content_preview": (fallback.get("content") or "")[:400],
+                })
+                if not fallback.get("error"):
+                    return fallback.get("content") or "", None
+                return None, (
+                    f"{engine} is rate limited and the Sarvam fallback also "
+                    f"failed: {fallback['error']}"
+                )
+            return None, result["error"]
+        return result.get("content") or "", None
 
     # Two attempts: the second nudges the model harder if the first misfires.
     attempts = [
@@ -2129,6 +2295,11 @@ def quiz():
                 continue
             citation, ctype = citation_for_quote(quote, entries) if quote else ("", "")
             if quote and not citation:
+                # Try fuzzy fallback: lightly paraphrased quotes still count
+                # as grounded if enough of their content-words appear in one
+                # entry.
+                citation, ctype = fuzzy_quote_match(quote, entries)
+            if quote and not citation:
                 continue
             kept.append({
                 "question": qtext,
@@ -2143,9 +2314,24 @@ def quiz():
             break
 
     if not kept:
-        # Gracious refusal message, not a scary technical error.
+        # Surface the real reason when it is a known rate limit or transport
+        # issue, and fall back to the gentle catch-all otherwise.
         total_words = sum(len(tokenize(e["text"])) for e in entries)
-        if total_words < 200:
+        err_lower = str(last_error or "").lower()
+        looks_ratelimited = (
+            "rate-limit" in err_lower
+            or "rate limit" in err_lower
+            or "429" in err_lower
+            or "tokens per minute" in err_lower
+            or "quota" in err_lower
+        )
+        if looks_ratelimited:
+            msg = (
+                "Vidya's LLM provider rate-limited this request. Please wait "
+                "about 30 seconds and click Take a Quiz again, or switch the "
+                "Engine to Sarvam-105b in Advanced options."
+            )
+        elif total_words < 200:
             msg = (
                 "This lecture is quite short, so Vidya could not draw enough "
                 "distinct ideas to build a reliable practice quiz. Try a longer "
@@ -2158,7 +2344,15 @@ def quiz():
                 "narrow, very repetitive, or the transcript quality is uneven. "
                 "Please try again, or load a different lecture."
             )
-        return jsonify({"error": msg, "quiz_unavailable": True}), 200
+        return jsonify({
+            "error": msg,
+            "quiz_unavailable": True,
+            "debug_engine": engine,
+            "debug_raw_preview": (last_content or "")[:2000],
+            "debug_last_error": last_error,
+            "debug_context_chars": len(context_text),
+            "debug_call_trace": call_trace,
+        }), 200
 
     return jsonify({
         "questions": kept,

@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Vidya - Interviewer Guide</title>
+<style>
+  @page { size: A4; margin: 22mm 20mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Georgia, "Cambria", "Times New Roman", serif;
+    font-size: 11.5pt;
+    line-height: 1.55;
+    color: #1e1e1e;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 40px 32px 60px;
+    background: #ffffff;
+  }
+  h1, h2, h3, h4 {
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: #0f172a;
+    line-height: 1.25;
+    page-break-after: avoid;
+  }
+  h1 {
+    font-size: 26pt;
+    margin: 0 0 6px;
+    letter-spacing: -0.5px;
+  }
+  h1 .accent {
+    background: linear-gradient(90deg, #7c3aed, #2563eb);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .tagline {
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: #4a4a4a;
+    font-size: 12pt;
+    margin: 0 0 6px;
+  }
+  .meta {
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: #6a6a6a;
+    font-size: 10pt;
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e0dccc;
+  }
+  h2 {
+    font-size: 16pt;
+    margin: 32px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #ede9fe;
+  }
+  h3 {
+    font-size: 12.5pt;
+    margin: 20px 0 6px;
+    color: #4c1d95;
+  }
+  h4 {
+    font-size: 11pt;
+    margin: 14px 0 4px;
+    color: #334155;
+  }
+  p { margin: 6px 0 10px; }
+  ul, ol { margin: 6px 0 12px; padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  code {
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 10pt;
+    background: #f4f2fb;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #1e1b4b;
+  }
+  a { color: #4f46e5; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .callout {
+    background: #fff8e1;
+    border-left: 3px solid #f59e0b;
+    padding: 10px 14px;
+    margin: 14px 0;
+    font-size: 10.5pt;
+    border-radius: 0 4px 4px 0;
+  }
+  .callout.info {
+    background: #eff6ff;
+    border-left-color: #3b82f6;
+  }
+  .callout.rotate {
+    background: #fef2f2;
+    border-left-color: #dc2626;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 16px;
+    font-size: 10.5pt;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e3f0;
+    vertical-align: top;
+  }
+  th {
+    background: #f4f2fb;
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    color: #0f172a;
+    font-weight: 600;
+  }
+  .section-break { page-break-before: always; }
+  .toc {
+    background: #faf7ee;
+    border: 1px solid #e5dfc8;
+    padding: 14px 20px 8px;
+    border-radius: 6px;
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
+    font-size: 10.5pt;
+    margin-bottom: 30px;
+  }
+  .toc h4 { margin: 0 0 8px; color: #1e1b4b; font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.05em; }
+  .toc ol { padding-left: 20px; }
+  .toc li { color: #334155; }
+  .brand-strip {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 55%, #2563eb 100%);
+    vertical-align: middle;
+    margin-right: 8px;
+    color: white;
+    font-family: "Noto Sans Devanagari", serif;
+    text-align: center;
+    line-height: 32px;
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .footer-note {
+    margin-top: 40px;
+    padding-top: 14px;
+    border-top: 1px solid #e0dccc;
+    font-size: 9.5pt;
+    color: #6a6a6a;
+  }
+</style>
+</head>
+<body>
+
+<div>
+  <span class="brand-strip">व</span>
+  <h1 style="display: inline-block; vertical-align: middle;">Vidya <span class="accent">Interviewer Guide</span></h1>
+</div>
+<p class="tagline">A grounded AI tutor for lecture videos, transcripts, and pre-reads.</p>
+<div class="meta">
+  Submission for the AI Office Hours (Tutor Bot) assignment.<br/>
+  Repository: <a href="https://github.com/meenapriyadars20/vidya-tutor-bot">github.com/meenapriyadars20/vidya-tutor-bot</a>
+</div>
+
+<div class="toc">
+  <h4>Contents</h4>
+  <ol>
+    <li>What Vidya is</li>
+    <li>How to test Vidya (user manual)</li>
+    <li>Approach and methodology</li>
+    <li>Features</li>
+    <li>Edge cases Vidya solves for</li>
+    <li>Edge cases Vidya does not solve for</li>
+    <li>A note on API key rotation</li>
+  </ol>
+</div>
+
+<h2>1. What Vidya is</h2>
+<p>Vidya is a locally hosted (and optionally cloud hosted) AI tutor for lecture videos. A student loads a lecture from a URL, an uploaded file, or pasted text, and asks questions by typing or by voice. Vidya answers strictly from the loaded lecture, backs every answer with a verbatim quote from the source, and shows the timestamp or pre-read from which the evidence was drawn.</p>
+<p>The bonus expectation of a speech to text, text to speech, and LLM pipeline is fully covered. Sarvam Saarika handles voice input, Sarvam Bulbul speaks the answer back, and the reasoning is done by one of three interchangeable LLMs (Groq Llama 3.3 70B by default, with Sarvam-105b and Google Gemini Flash as alternatives).</p>
+
+<h2 class="section-break">2. How to test Vidya (user manual)</h2>
+
+<h3>Live URL</h3>
+<p>The easiest path is to open the hosted version. No install needed.</p>
+<div class="callout info">
+  <strong>Vidya live URL:</strong> <a href="[YOUR_RENDER_URL_HERE]">[YOUR_RENDER_URL_HERE]</a><br/>
+  <em>Note: the free hosting tier sleeps after 15 minutes of inactivity. Your first click may take about 40 seconds to wake the server. Every click after that is instant.</em>
+</div>
+
+<div class="callout">
+  <strong>Please demo on the hosted URL using file upload or pasted text.</strong> Video URLs (YouTube, Vimeo, TED, etc.) do not reliably work on cloud hosting because YouTube and several other platforms detect Render's server IPs as datacenter traffic and block video downloads from them. This is a platform side restriction, not a Vidya limitation, and it affects every yt-dlp based hosted service.
+  <ul style="margin: 6px 0 0;">
+    <li><strong>Preferred:</strong> drop any lecture audio or video file (MP3, MP4, WAV, M4A, etc.) into the "Upload a lecture file" input. This exercises the full Sarvam STT pipeline end to end.</li>
+    <li><strong>Also fine:</strong> paste any transcript text into the "Paste text" box.</li>
+  </ul>
+  Video URLs (including YouTube) work fully when Vidya is run locally from the source (see the GitHub link), because a home IP is trusted by these platforms.
+</div>
+
+<h3>What you will see when you open the URL</h3>
+<ul>
+  <li>A top strip with the Vidya logo, a language switcher (11 Indian languages plus English), and a settings gear icon.</li>
+  <li>A "Lecture Source" panel on the left where you paste a video URL, upload a file, or paste a transcript.</li>
+  <li>A "Ask Vidya" chat panel on the right where you type or speak your questions.</li>
+</ul>
+<p>All four API keys are pre-loaded on the hosted version, so you do not need to enter anything to get started.</p>
+
+<h3>A five minute test that shows everything Vidya can do</h3>
+<ol>
+  <li><strong>Load a lecture.</strong> Use the "Upload a lecture file" input to drop any short lecture audio or video file you have (MP3, MP4, WAV, M4A, etc.). A 5 to 15 minute clip works best for the demo. Click <strong>Load</strong>. Vidya extracts the audio, chunks it, and transcribes it with Sarvam Saarika in parallel. Progress is shown live. Total time is roughly one minute per five minutes of audio.</li>
+  <li><strong>Ask an in scope question.</strong> Type a question that the lecture covers (for example, if the lecture is about photosynthesis, ask "What are the products of photosynthesis?"). Click <strong>Ask Vidya</strong>. You should receive an answer within a few seconds, backed by evidence.</li>
+  <li><strong>Verify the grounding.</strong> Click <strong>Show evidence</strong> below the answer. You will see one or more verbatim quotes from the transcript, each with the exact timestamp where it appeared. This is not decoration; the backend rejects any answer whose quote does not actually appear in the transcript.</li>
+  <li><strong>Ask an out of scope question.</strong> Ask something clearly outside the lecture ("What is the capital of France?"). Vidya will politely say "This topic is not covered in this lecture" instead of guessing.</li>
+  <li><strong>Speak an answer aloud.</strong> Click the <strong>Speak</strong> button next to any answer. Sarvam Bulbul reads it aloud. Use <strong>Pause</strong> to hold it, <strong>Resume</strong> to continue.</li>
+  <li><strong>Try a voice question.</strong> Click the <strong>Record</strong> button next to the question input, ask something out loud, then click Stop. Sarvam Saarika transcribes what you said and drops it into the input. Click Ask Vidya.</li>
+  <li><strong>Try a different language.</strong> At the top of the page there are three dropdowns: Question Language, Answer Language, and Answer Voice. Set them all to Hindi (or Marathi, or Tamil, or any of the 11 Indian languages Sarvam supports). Ask the same question in the new language, or in English, and confirm the answer comes back in the chosen language and is spoken in the chosen voice.</li>
+  <li><strong>Take a quiz.</strong> Click <strong>Take a Quiz</strong> (in the chat panel). Vidya generates five multiple choice questions from the loaded lecture. Any question whose supporting quote does not verify is silently dropped, so what you see is guaranteed grounded.</li>
+</ol>
+
+<h3>Testing the fallback and edge cases</h3>
+<ul>
+  <li><strong>Long lecture</strong>: upload a longer audio or video file (over 30 minutes). The BM25 retrieval pipeline kicks in and Vidya still answers in a few seconds.</li>
+  <li><strong>Pre reads</strong>: after loading a lecture, click <strong>Add URL</strong> in the "attach pre-reads" section and paste an article link (a Wikipedia page, a paper PDF, a blog post). Pre-read URLs use a lightweight fetch and are not affected by the video download restrictions. Vidya extracts the text and treats it as authoritative alongside the transcript. Ask a question that only the pre-read answers; the citation now says "From pre-read: [source name]".</li>
+  <li><strong>Different LLM engine</strong>: click the gear icon at the top right, scroll to Advanced reasoning options, and switch the engine to Sarvam-105b or Gemini Flash. Ask the same question and compare.</li>
+  <li><strong>UI in an Indian language</strong>: click the language pill at the top right and switch the interface itself to Hindi, Marathi, Tamil, or any of the 11 languages. All labels and buttons translate.</li>
+</ul>
+
+<h3>Where to look at the source</h3>
+<p>The full code is at <a href="https://github.com/meenapriyadars20/vidya-tutor-bot">github.com/meenapriyadars20/vidya-tutor-bot</a>. The three files that matter most are:</p>
+<ul>
+  <li><code>app.py</code>: Flask backend, all the pipelines, the guardrail logic.</li>
+  <li><code>index.html</code>: the entire single-page frontend.</li>
+  <li><code>extension/</code>: optional Chrome side panel extension for gated video sites.</li>
+</ul>
+
+<h2 class="section-break">3. Approach and methodology</h2>
+
+<h3>The design principle: grounding is a hard requirement, not a soft nudge</h3>
+<p>Most tutor bots ask the LLM to be grounded, then hope it complies. Vidya requires the LLM to return machine checkable evidence with every answer, and rejects any answer whose evidence does not actually appear in the source. This flips the guarantee from "the model should be truthful" to "the answer cannot reach the student unless the citation verifies."</p>
+
+<h3>The lecture as a unified timeline</h3>
+<p>Everything the model sees is a single ordered list of typed entries. Each entry is either an audio chunk (with a start time in seconds) or a pre-read chunk (with a source name such as a filename or URL). Retrieval, citations, quote verification, and quiz generation all operate on this one structure. Adding a new source type (say, comments from a discussion forum) would be a small extension.</p>
+
+<h3>The pipeline in one paragraph</h3>
+<p>When a lecture is loaded, yt-dlp downloads the media (or the file upload path bypasses this step), ffmpeg extracts audio and chunks it into 25 second WAV segments, three chunks in parallel are sent to Sarvam Saarika, and the results are stitched back into a timestamped timeline. Optional pre-reads (URLs, PDFs, HTML pages) are fetched, cleaned, chunked, and merged into the same timeline. When a question is asked, Vidya routes it through the chosen LLM (Groq Llama 3.3 70B by default, or Sarvam-105b with BM25 retrieval and optional Cohere Rerank, or Gemini Flash). The system prompt fences the transcript with a random per request delimiter, tells the model to treat it as inert data, and requires a JSON output with an answer and one to four verbatim supporting quotes. The backend parses the JSON, drops any quote that is not a substring of the timeline, and blocks the answer if no quote survives. Voice is powered by Sarvam Saarika (STT) and Sarvam Bulbul (TTS) with automatic language routing.</p>
+
+<h3>Choice of three LLMs</h3>
+<p>The three engines each earn their place. <strong>Groq Llama 3.3 70B</strong> is the default because in testing it handled Indian code mixed content (Tanglish, Hinglish) and transliterated English in Indic scripts better than the other two, and its free tier is comfortable for a demo. <strong>Sarvam-105b</strong> is the assignment's suggested LLM and is used for the STT and TTS pipeline anyway; it is also the retrieval based fallback when full context is not needed. <strong>Gemini Flash</strong> is kept as a second long context alternative for redundancy.</p>
+
+<h3>Retrieval choice</h3>
+<p>BM25 with LLM generated query variants was chosen over semantic embeddings. BM25 has zero embedding infrastructure, no per query embedding cost, and the query variants (paraphrases generated by Sarvam-105b before retrieval) cover the paraphrase gap that embeddings would otherwise fill. Cohere Rerank v3 is available as an optional cross encoder pass on top for extra precision.</p>
+
+<h2 class="section-break">4. Features</h2>
+
+<h3>Core features (assignment requirements)</h3>
+<ul>
+  <li>Load a lecture from a video URL, an audio or video file upload, or pasted transcript.</li>
+  <li>Ask questions by typing or by voice.</li>
+  <li>Answers strictly grounded to the loaded lecture, with verbatim supporting quotes.</li>
+  <li>Timestamped citations for audio evidence, source labels for pre-read evidence.</li>
+  <li>Speaks answers aloud with Sarvam Bulbul, supports pause and resume.</li>
+  <li>Full voice loop: STT (Sarvam Saarika), reasoning (LLM), TTS (Sarvam Bulbul).</li>
+</ul>
+
+<h3>Beyond the bonus expectation</h3>
+<ul>
+  <li><strong>Three interchangeable LLM engines</strong>: Groq Llama 3.3 70B (default), Sarvam-105b, Google Gemini Flash. Switch in settings.</li>
+  <li><strong>Pre-reads</strong>: attach papers, articles, and PDFs as supplementary source material. Answers can cite them exactly like the transcript. Links found in a YouTube video's description are auto suggested after an LLM classifier drops social and merch noise.</li>
+  <li><strong>Any public video URL</strong>: yt-dlp supports 1000+ sites, not just YouTube.</li>
+  <li><strong>Chrome side panel extension</strong>: for private, gated learning portals, either sends the current tab URL to Vidya or records the tab audio directly.</li>
+  <li><strong>Full multilingual support</strong>: 11 Sarvam supported Indian languages plus English. Question language, answer language, and answer voice are chosen independently.</li>
+  <li><strong>The UI itself is translatable</strong> into all 11 languages.</li>
+  <li><strong>Handles Indian code mixing</strong>: Tanglish, Hinglish, and similar mixed input styles are treated as normal Indian classroom speech.</li>
+  <li><strong>Handles transliterated English in Indic scripts</strong>: the prompt contains a concrete decode key so that "டைஜெஸ்டிவ் சிஸ்டம்" (Tamil letters spelling "digestive system") is treated as the English word.</li>
+  <li><strong>Colloquial to formal</strong>: when the lecturer uses casual phrasing, Vidya replies in standard textbook terminology while keeping the lecturer's actual words as the supporting quote.</li>
+  <li><strong>Quiz mode</strong>: generates five grounded multiple choice questions with per question explanations. Ungrounded questions are silently dropped.</li>
+  <li><strong>Chat memory across five turns</strong>: follow up questions like "explain that further" work naturally.</li>
+  <li><strong>Fresh session on every refresh</strong>: prevents session confusion. Preferences (language, engine, voice) persist.</li>
+  <li><strong>Warm parchment theme</strong>: easier on the eyes than typical bright white SaaS design.</li>
+  <li><strong>Mobile responsive</strong>: works cleanly on a phone screen.</li>
+</ul>
+
+<h2 class="section-break">5. Edge cases Vidya solves for</h2>
+
+<table>
+<thead>
+<tr><th>Edge case</th><th>How Vidya handles it</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td>Model hallucinates a citation</td>
+  <td>Every supporting quote is checked against timeline entries. Unverified quotes are dropped; if none survive, the entire answer is blocked and replaced with the "not covered" fallback.</td>
+</tr>
+<tr>
+  <td>Question is genuinely outside the lecture</td>
+  <td>Returns a graceful "This topic is not covered in this lecture" in the student's chosen language, rather than fabricating an answer.</td>
+</tr>
+<tr>
+  <td>Lecture is very long (over ~3,500 words)</td>
+  <td>BM25 retrieval kicks in with LLM generated query variants, always includes the intro and conclusion, guarantees pre read seats, and can rerank with Cohere.</td>
+</tr>
+<tr>
+  <td>Prompt injection embedded in the transcript</td>
+  <td>Transcript is fenced with a random per request delimiter and explicitly labelled as untrusted data.</td>
+</tr>
+<tr>
+  <td>Follow up questions</td>
+  <td>Last five Q and A turns are included as chat history.</td>
+</tr>
+<tr>
+  <td>Rate limits on Sarvam, Gemini, Groq</td>
+  <td>Exponential backoff and auto retry. Groq's "try again in X seconds" hint is parsed and honoured. If retries are exhausted, a friendly fallback message suggests switching engines.</td>
+</tr>
+<tr>
+  <td>Partial STT failure on some chunks</td>
+  <td>Successful chunks are kept and reported; failed chunks are counted and skipped. Sub 1.5 second trailing chunks are dropped before they reach Sarvam.</td>
+</tr>
+<tr>
+  <td>Fresh session behaviour</td>
+  <td>Lecture and chat are wiped on every browser refresh; preferences persist. Prevents stale session confusion.</td>
+</tr>
+<tr>
+  <td>Multilingual answers</td>
+  <td>Answer language independently chosen and passed to TTS, so a Marathi answer plays in a Marathi voice.</td>
+</tr>
+<tr>
+  <td>Indian code mixing (Tanglish, Hinglish)</td>
+  <td>Prompt treats mixed input as normal Indian classroom speech, not as a parsing error.</td>
+</tr>
+<tr>
+  <td>Transliterated English in Indic scripts</td>
+  <td>Prompt has a concrete decode key with example phrases so the model bridges them to the English concept.</td>
+</tr>
+<tr>
+  <td>Colloquial vocabulary in the transcript</td>
+  <td>Answer uses standard terminology; lecturer's own phrasing is kept as the supporting quote.</td>
+</tr>
+<tr>
+  <td>Malformed JSON from the model</td>
+  <td>Balanced brace parser, regex field extraction fallback, and plain text refusal detection. Never surfaces raw broken output.</td>
+</tr>
+<tr>
+  <td>Long spoken answers cutting off mid sentence</td>
+  <td>Text is split at sentence boundaries into segments under 900 characters. Audio segments are queued and played sequentially with pause and resume controls.</td>
+</tr>
+<tr>
+  <td>Videos above the safety cap</td>
+  <td>Hard cap of three hours, with a soft warning at one hour before processing.</td>
+</tr>
+<tr>
+  <td>Gated video sites</td>
+  <td>Chrome extension side panel can send the current tab URL or capture the tab audio directly.</td>
+</tr>
+<tr>
+  <td>DRM protected streaming platforms in the extension</td>
+  <td>Netflix, Prime Video, Disney+, Hotstar and similar are detected against a known host list and warned about before recording.</td>
+</tr>
+</tbody>
+</table>
+
+<h2 class="section-break">6. Edge cases Vidya does not solve for</h2>
+
+<h3>Visual understanding of video frames</h3>
+<p>Vidya does not analyze diagrams, slide text, whiteboard content, or charts from video frames. An earlier Gemini vision integration was removed because per frame calls consumed the free tier quota too quickly on longer videos. As a result, if a concept is shown on screen but never spoken, Vidya cannot describe it. A future version could reintroduce vision through a paid tier or a locally hosted vision model.</p>
+
+<h3>Real token streaming</h3>
+<p>The frontend uses a typing animation applied after the full answer is received. This looks like ChatGPT style streaming, but the first token latency is not actually reduced. This was a deliberate simplification because true streaming complicates the JSON parsing and the guardrail check, and adds no capability the student notices at demo speed.</p>
+
+<h3>Speaker diarization</h3>
+<p>The transcript is not separated by speaker. A panel discussion or interview appears as one continuous voice. Sarvam Saarika supports diarization; enabling it would be a small future addition.</p>
+
+<h3>Cross lecture library</h3>
+<p>Vidya holds one active lecture at a time. Loading a new lecture drops the previous one. A searchable library across multiple past lectures would require a small local database and cross lecture retrieval.</p>
+
+<h3>Editable transcripts</h3>
+<p>The student cannot inline correct an STT error. They can copy the transcript out, edit it externally, and paste it back through the "Paste text" input.</p>
+
+<h3>Non Sarvam languages</h3>
+<p>Sarvam Saarika supports 11 languages: English plus 10 major Indian languages. Videos in French, German, Spanish, Chinese, Japanese, Arabic, and other languages produce empty or garbled transcripts. Adding OpenAI Whisper or a Whisper endpoint would extend coverage to 99 languages.</p>
+
+<h3>DRM protected streaming</h3>
+<p>The Chrome extension cannot capture audio from DRM protected platforms. This is a browser and OS level restriction, not a Vidya limitation. The extension is useful for corporate LMS platforms and YouTube Premium content, but Netflix, Disney+, and similar streaming apps are out of reach.</p>
+
+<h3>Automated evaluation harness</h3>
+<p>A batch test suite that runs a known question and answer bank against many lectures would prove grounding at scale. This has not been built; the guardrail is verified through manual testing and honest self reporting.</p>
+
+<h3>Rate limit visibility</h3>
+<p>If Sarvam, Groq, Gemini, or Cohere quotas are near exhaustion, Vidya does not surface this proactively. The user only sees a failure when a call is rejected.</p>
+
+<h2 class="section-break">7. A note on API key rotation</h2>
+
+<div class="callout rotate">
+  <strong>Please let me know once your team has finished evaluating the submission.</strong>
+  <br/><br/>
+  The hosted Vidya URL uses my personal API keys for Sarvam, Groq, Gemini, and Cohere. Once you have finished testing, I will rotate these keys so that they are no longer active on the shared demo link. A quick note by email or chat that you are done is all I need to make the switch.
+</div>
+
+<div class="footer-note">
+  Thank you for taking the time to review this submission. Feedback, positive or critical, is very welcome. If any step of the manual above does not behave as described, please tell me so I can look into it before rotating.
+</div>
+
+</body>
+</html>
