@@ -2050,7 +2050,9 @@ $("ask-btn").onclick = async () => {
       setStatus(status, j.error || "Failed.", "err");
       return;
     }
-    const blocked = j.guardrail && j.guardrail !== "passed";
+    // "passed_soft" is a real answer with unverified quotes (script mismatch).
+    // Treat it as passed for styling purposes; the badge is set separately.
+    const blocked = j.guardrail && j.guardrail !== "passed" && j.guardrail !== "passed_soft";
     const item = {
       question,
       answer: j.answer,
