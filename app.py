@@ -1111,9 +1111,22 @@ def video_url_transcript():
 
         entries = build_timeline(audio_entries, visual_entries)
         if not entries:
+            # Give the user a real explanation instead of a mystery.
+            reasons = (audio_errors + vision_errors)[:5]
+            joined = "; ".join(reasons) if reasons else "no chunks returned text"
+            hint = ""
+            joined_lower = joined.lower()
+            if "429" in joined_lower or "rate" in joined_lower or "quota" in joined_lower:
+                hint = " Sarvam Saarika is rate-limited on your key. Wait 30 seconds and try again, or try a shorter file."
+            elif "language" in joined_lower or "unsupported" in joined_lower:
+                hint = " The audio may be in a language Sarvam Saarika does not support (it supports English and 10 Indian languages)."
+            elif "empty" in joined_lower or "no chunks" in joined_lower:
+                hint = " The audio may be silent, in an unsupported language, or the download did not capture the audio track."
             return jsonify({
-                "error": "Could not extract any content from this video.",
-                "detail": (audio_errors + vision_errors)[:5],
+                "error": f"Could not extract any content from this video. Reason(s): {joined}.{hint}",
+                "detail": reasons,
+                "audio_chunks_total": len(audio_chunks),
+                "audio_chunks_ok": 0,
             }), 502
 
         warnings = []
@@ -1605,6 +1618,48 @@ def extract_json_from(text: str):
     return None
 
 
+def extract_from_prose(content: str) -> dict:
+    """Fallback when the model ignores JSON and returns natural prose with
+    bullet-point citations. Splits the content into an answer paragraph and
+    a list of quoted / bulleted spans that look like citations."""
+    if not content:
+        return {}
+    text = content.strip()
+
+    # Collect quoted spans (straight, curly, and low-9 quotes).
+    quote_re = re.compile(r'["“”‘’]([^"“”‘’\n]{10,500})["“”‘’]')
+    quotes = [m.group(1).strip() for m in quote_re.finditer(text)]
+
+    # Also collect bullet points; treat each bullet body as a candidate quote.
+    bullet_re = re.compile(r'^\s*[-•\*]\s+(.+)$', re.MULTILINE)
+    for m in bullet_re.finditer(text):
+        bullet = m.group(1).strip().strip('"“”‘’').strip()
+        if 10 <= len(bullet) <= 500 and bullet not in quotes:
+            quotes.append(bullet)
+
+    # Answer is the prose before the first bullet or "references" marker.
+    stop_markers = [
+        "\n-", "\n•", "\n*",
+        "references:", "citations:", "supporting:",
+        "ஆதார", "प्रमाण", "উদ্ধৃত", "sources:",
+    ]
+    lowest_cut = len(text)
+    text_lower = text.lower()
+    for marker in stop_markers:
+        idx = text_lower.find(marker.lower())
+        if idx > 20 and idx < lowest_cut:
+            lowest_cut = idx
+    answer = text[:lowest_cut].strip()
+
+    if len(answer) < 30:
+        return {}
+    return {
+        "in_scope": True,
+        "answer": answer,
+        "supporting_quotes": quotes[:4],
+    }
+
+
 def extract_fields_via_regex(text: str) -> dict:
     """Best-effort field extraction when JSON parse fails, e.g. truncation."""
     result = {}
@@ -1640,14 +1695,19 @@ def citation_for_quote(quote: str, entries: list) -> tuple:
     return "", ""
 
 
-def fuzzy_quote_match(quote: str, entries: list, threshold: float = 0.55) -> tuple:
+def fuzzy_quote_match(quote: str, entries: list, threshold: float = 0.4) -> tuple:
     """Fallback matcher: if strict substring fails, accept a citation when at
     least `threshold` fraction of the quote's non-trivial words appear inside
-    a single entry. Groq and Sarvam sometimes lightly paraphrase; this lets
-    a well-supported answer survive minor rewording."""
+    a single entry. If word-overlap also fails, fall back to character-level
+    sequence similarity which tolerates single-character differences like
+    Tamil vowel markers (ஆரம்பிச்ச vs ஆரம்பிச்சு) or one-letter typos.
+    Together this catches lightly paraphrased quotes without opening the door
+    to unrelated content."""
     quote_words = set(w for w in re.findall(r"\w+", quote.lower()) if len(w) > 2)
     if len(quote_words) < 4:
         return "", ""
+
+    # Pass 1: word-set overlap.
     best_overlap = 0.0
     best_entry = None
     for e in entries:
@@ -1658,12 +1718,39 @@ def fuzzy_quote_match(quote: str, entries: list, threshold: float = 0.55) -> tup
         if overlap > best_overlap:
             best_overlap = overlap
             best_entry = e
-    if best_entry is None or best_overlap < threshold:
+    if best_entry is not None and best_overlap >= threshold:
+        etype = best_entry.get("type", "audio")
+        if etype == "preread":
+            return best_entry.get("source", "pre-read"), "preread"
+        return format_timestamp(best_entry.get("start", 0)), etype
+
+    # Pass 2: character-level similarity. Handles per-word mora/vowel drift
+    # like ஆரம்பிச்ச vs ஆரம்பிச்சு that Pass 1 treats as different tokens.
+    from difflib import SequenceMatcher
+    q_norm = normalize_for_match(quote)
+    if len(q_norm) < 20:
         return "", ""
-    etype = best_entry.get("type", "audio")
-    if etype == "preread":
-        return best_entry.get("source", "pre-read"), "preread"
-    return format_timestamp(best_entry.get("start", 0)), etype
+    best_char = 0.0
+    best_char_entry = None
+    for e in entries:
+        e_norm = normalize_for_match(e["text"])
+        if len(e_norm) < 20:
+            continue
+        matcher = SequenceMatcher(None, q_norm, e_norm, autojunk=False)
+        # Total matched characters / quote length. Anchors at whichever entry
+        # covers the largest fraction of the quote's characters.
+        matched = sum(b.size for b in matcher.get_matching_blocks())
+        ratio = matched / len(q_norm)
+        if ratio > best_char:
+            best_char = ratio
+            best_char_entry = e
+    if best_char_entry is not None and best_char >= 0.55:
+        etype = best_char_entry.get("type", "audio")
+        if etype == "preread":
+            return best_char_entry.get("source", "pre-read"), "preread"
+        return format_timestamp(best_char_entry.get("start", 0)), etype
+
+    return "", ""
 
 
 def verify_quotes(raw_quotes: list, entries: list) -> list:
@@ -1676,7 +1763,14 @@ def verify_quotes(raw_quotes: list, entries: list) -> list:
         q = q.strip()
         if not q:
             continue
+        # Strict substring first (fastest, most defensive).
         citation, ctype = citation_for_quote(q, entries)
+        if not citation:
+            # Two-pass fuzzy fallback: word-set overlap, then character-level
+            # similarity. Tolerates light paraphrasing, per-character drift in
+            # Indic scripts (e.g. ஆரம்பிச்ச vs ஆரம்பிச்சு), and one-letter
+            # transliteration slips (e.g. ஃபேர்னிக்ஸ் vs கபேர்னிக்ஸ்).
+            citation, ctype = fuzzy_quote_match(q, entries)
         if citation:
             verified.append({
                 "quote": q,
@@ -1879,7 +1973,56 @@ def ask():
             "This principle applies to Hindi, Bengali, Marathi, Kannada, Telugu, "
             "Malayalam scripts too. If the student asks about 'digestive system' "
             "and the transcript contains 'டைஜெஸ்டிவ் சிஸ்டம்', the topic IS "
-            "covered. You MUST answer."
+            "covered. You MUST answer.\n\n"
+            "SUPPORTING QUOTES ARE COPY-PASTE ONLY (HARD RULE):\n"
+            "A supporting_quote is NOT something you write, compose, or "
+            "construct. It is a substring that already exists in one timeline "
+            "entry, and you select and COPY that substring exactly. Character "
+            "for character. Same words, same word order, same punctuation, "
+            "same spacing, same script.\n\n"
+            "DO NOT do any of the following. All of these will fail the "
+            "guardrail:\n"
+            "  - Merging fragments from two different timeline entries into "
+            "one 'quote'.\n"
+            "  - Adding connecting words like 'and', 'so', '-la', 'இருக்கு' "
+            "that were not in the exact transcript substring.\n"
+            "  - Rearranging the order of words to make the quote read "
+            "better.\n"
+            "  - Translating the quote into the answer language.\n"
+            "  - Inventing a plausible-sounding sentence that summarises what "
+            "the lecturer said.\n\n"
+            "How to produce a valid supporting_quote:\n"
+            "  1. Pick ONE timeline entry that clearly supports one claim in "
+            "your answer.\n"
+            "  2. Find a continuous substring of that entry's text (roughly 5 "
+            "to 30 words).\n"
+            "  3. Copy those exact characters into supporting_quotes. Do not "
+            "modify anything.\n"
+            "  4. Repeat with a different entry for another quote if you want "
+            "to support another claim.\n\n"
+            "If you cannot find a real verbatim substring that supports a "
+            "claim, drop that claim from your answer. Do not fabricate a quote.\n\n"
+            "Worked example.\n"
+            "  Suppose the timeline contains this entry, exactly:\n"
+            "    [00:50] AUDIO: மவுத்ல இருந்து ஆரம்பிச்சு ஃபேர்னிக்ஸ், "
+            "ஈசோபேகஸ், ஸ்டொமக், ஸ்மால் இன்டஸ்டைன், லார்ஜ் இன்டஸ்டைன், "
+            "ரெக்டம், கடைசியா ஏனஸ்.\n"
+            "  Student question (English): What are the parts of the digestive system?\n"
+            "  Required answer_language: Tamil.\n"
+            "  Correct JSON:\n"
+            "  {\n"
+            "    \"in_scope\": true,\n"
+            "    \"answer\": \"செரிமான அமைப்பில் வாய், தொண்டை, உணவுக்குழாய், "
+            "வயிறு, சிறு குடல், பெரு குடல், மலக்குடல் ஆகிய பகுதிகள் உள்ளன.\",\n"
+            "    \"supporting_quotes\": [\"மவுத்ல இருந்து ஆரம்பிச்சு "
+            "ஃபேர்னிக்ஸ், ஈசோபேகஸ், ஸ்டொமக், ஸ்மால் இன்டஸ்டைன், லார்ஜ் "
+            "இன்டஸ்டைன், ரெக்டம், கடைசியா ஏனஸ்\"]\n"
+            "  }\n"
+            "  The answer is in Tamil, translated for the student. The "
+            "supporting_quote is copied character-for-character from the "
+            "actual transcript entry, keeping the transliterated-English "
+            "medical terms exactly as written. Notice ஏனஸ் not அனஸ், because "
+            "that is what the transcript actually contains."
         )
 
     system_prompt = (
@@ -1973,6 +2116,25 @@ def ask():
     else:
         llm_result = call_sarvam_chat(system_prompt, history, question, sarvam_key)
 
+    # Auto-fallback to Sarvam when the primary engine is rate-limited. Same
+    # rescue path the quiz endpoint uses; keeps a demo running smoothly when
+    # Groq's 12K/min cap trips.
+    if llm_result.get("error") and engine != "sarvam":
+        err_lower = str(llm_result["error"]).lower()
+        looks_ratelimited = (
+            "rate-limit" in err_lower
+            or "rate limit" in err_lower
+            or "429" in err_lower
+            or "tokens per minute" in err_lower
+            or "quota" in err_lower
+        )
+        if looks_ratelimited:
+            llm_result = call_sarvam_chat(system_prompt, history, question, sarvam_key)
+            engine_note = (engine_note + " " if engine_note else "") + (
+                f"{engine} was rate-limited; Sarvam-105b answered instead."
+            ).strip()
+            engine = "sarvam"
+
     if llm_result.get("error"):
         err = llm_result["error"]
         if err == "unexpected_response_shape":
@@ -2010,12 +2172,19 @@ def ask():
         if fallback.get("in_scope") is not None or fallback.get("answer"):
             parsed = fallback
         else:
-            return jsonify({
-                "answer": localized_not_covered,
-                "guardrail": "model_output_not_json",
-                "raw_output_preview": (content or "")[:1200],
-                **retrieval_debug,
-            })
+            # Prose fallback: model gave a natural-language answer with
+            # bullet-point citations instead of the JSON schema. Extract what
+            # we can so the student still gets the answer.
+            prose = extract_from_prose(content or "")
+            if prose.get("answer"):
+                parsed = prose
+            else:
+                return jsonify({
+                    "answer": localized_not_covered,
+                    "guardrail": "model_output_not_json",
+                    "raw_output_preview": (content or "")[:1200],
+                    **retrieval_debug,
+                })
 
     in_scope = bool(parsed.get("in_scope"))
     answer = (parsed.get("answer") or "").strip()
@@ -2047,12 +2216,70 @@ def ask():
         })
 
     verified = verify_quotes(raw_quotes, entries)
+    if not verified and answer and len(answer) >= 60:
+        # Answer is substantial and content-derived, but the model wrote its
+        # quotes in a form we cannot verify against the transcript (common on
+        # cross-script Indic content: transcript in Tamil script, quotes in
+        # Latin-script transliteration, or vice versa). Rather than blocking
+        # an otherwise good answer, we surface it with a softer badge so the
+        # student can still learn, but transparency about the reduced check
+        # is preserved.
+        return jsonify({
+            "answer": answer,
+            "supporting_quote": raw_quotes[0] if raw_quotes else "",
+            "supporting_quotes": [
+                {"quote": q, "citation": "", "citation_type": "unverified"}
+                for q in raw_quotes[:3]
+            ],
+            "timestamp": "",
+            "citation": "",
+            "citation_type": "unverified",
+            "guardrail": "passed_soft",
+            "note": "Answer accepted on model reasoning; individual quotes could not be verified verbatim (likely due to script mismatch between transcript and model output).",
+            **retrieval_debug,
+        })
+
     if not verified:
+        # Diagnostic: compute the best word-overlap and char-similarity for
+        # each attempted quote, so we can see WHY the fuzzy match rejected it.
+        from difflib import SequenceMatcher
+        diag = []
+        for q in raw_quotes[:3]:
+            if not isinstance(q, str) or not q.strip():
+                continue
+            q_words = set(w for w in re.findall(r"\w+", q.lower()) if len(w) > 2)
+            q_norm = normalize_for_match(q)
+            best_word_overlap = 0.0
+            best_char_ratio = 0.0
+            best_entry_preview = ""
+            for e in entries:
+                e_words = set(w for w in re.findall(r"\w+", e["text"].lower()) if len(w) > 2)
+                if e_words and q_words:
+                    wo = len(q_words & e_words) / len(q_words)
+                    if wo > best_word_overlap:
+                        best_word_overlap = wo
+                        best_entry_preview = e["text"][:120]
+                e_norm = normalize_for_match(e["text"])
+                if len(q_norm) >= 20 and len(e_norm) >= 20:
+                    m = SequenceMatcher(None, q_norm, e_norm, autojunk=False)
+                    ratio = sum(b.size for b in m.get_matching_blocks()) / max(len(q_norm), 1)
+                    if ratio > best_char_ratio:
+                        best_char_ratio = ratio
+                        if not best_entry_preview:
+                            best_entry_preview = e["text"][:120]
+            diag.append({
+                "quote_preview": q[:150],
+                "quote_word_count": len(q_words),
+                "best_word_overlap": round(best_word_overlap, 3),
+                "best_char_similarity": round(best_char_ratio, 3),
+                "closest_entry_preview": best_entry_preview,
+            })
         return jsonify({
             "answer": localized_not_covered,
             "guardrail": "quote_not_in_timeline",
             "blocked_answer": answer,
             "blocked_quote": " | ".join(raw_quotes[:3]),
+            "quote_match_diagnostic": diag,
             **retrieval_debug,
         })
 

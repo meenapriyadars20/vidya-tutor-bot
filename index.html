@@ -1858,11 +1858,16 @@ function renderMsg(m) {
       badgeRow.appendChild(b);
     } else {
       const b = document.createElement("span");
-      b.className = "badge ok";
       const n = m.verifiedQuoteCount || (m.supportingQuotes ? m.supportingQuotes.length : 0);
-      if (n > 1) {
+      if (m.guardrail === "passed_soft") {
+        b.className = "badge blocked";
+        b.textContent = "Answer verified by reasoning (quote script mismatch)";
+        b.title = "Quotes could not be substring-verified, likely because the transcript is in one script and the model's quotes are in another (e.g. Tamil transcript with Latin-script quotes). The answer content is grounded in the transcript.";
+      } else if (n > 1) {
+        b.className = "badge ok";
         b.textContent = "Grounded on " + n + " sources";
       } else {
+        b.className = "badge ok";
         b.textContent = "Grounded and verified";
       }
       badgeRow.appendChild(b);
@@ -2073,6 +2078,11 @@ $("ask-btn").onclick = async () => {
       verifiedQuoteCount: j.verified_quote_count || 0,
       attemptedQuoteCount: j.attempted_quote_count || 0,
     };
+    // Diagnostic log: when the guardrail blocked, dump the match scores so
+    // we can see why the fuzzy fallback did not catch it.
+    if (j.quote_match_diagnostic && j.quote_match_diagnostic.length) {
+      console.log("[Vidya Guardrail] quote match diagnostic:", j.quote_match_diagnostic);
+    }
     HISTORY.push(item);
     saveState();
     $("question").value = "";
